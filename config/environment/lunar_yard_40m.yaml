@@ -26,26 +26,26 @@ terrain_manager:
     crater_generator:
       profiles_path: assets/Terrains/crater_spline_profiles.pkl
       z_scale: 0.2
-      seed: ${...seed}
+      seed: 42
     crater_distribution:
-      x_size: ${...terrain_manager.sim_length}
-      y_size: ${...terrain_manager.sim_width}
+      x_size: 40.0
+      y_size: 40.0
       densities: [0.025, 0.05, 0.5]
       radius: [[1.5, 2.5], [0.75, 1.5], [0.25, 0.5]]
-      seed: ${...seed}
+      seed: 42
     base_terrain_generator:
-      x_size: ${...terrain_manager.sim_length}
-      y_size: ${...terrain_manager.sim_width}
-      resolution: ${...terrain_manager.resolution}
+      x_size: 40.0
+      y_size: 40.0
+      resolution: 0.02
       max_elevation: 0.5
       min_elevation: -0.5
       z_scale: 0.8
-      seed: ${...seed}
+      seed: 42
     deformation_engine:
       enable: false
-      terrain_resolution: ${...terrain_manager.resolution}
-      terrain_width: ${...terrain_manager.sim_width}
-      terrain_height: ${...terrain_manager.sim_length}
+      terrain_resolution: 0.02
+      terrain_width: 40.0
+      terrain_height: 40.0
 
 stellar_engine_settings:
   start_date:
@@ -77,7 +77,7 @@ rocks_settings:
   assets_root: assets/USD_Assets/rocks
   rocks_settings:
     large_rocks:
-      seed: ${....seed}
+      seed: 42
       collections: ["lunar_rocks/rocks_s2_r256"]
       realistic_distribution:
         method: background_scatter
@@ -86,7 +86,7 @@ rocks_settings:
         alpha: 2.2
         density: 0.3
     small_rocks:
-      seed: ${....seed}
+      seed: 42
       collections: ["lunar_rocks/rocks_s2_r128"]
       realistic_distribution:
         method: background_scatter
