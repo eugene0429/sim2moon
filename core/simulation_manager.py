@@ -67,7 +67,7 @@ class SimulationManager:
             mode_str = self._cfg.get("mode", "ROS2")
             mode = SimulatorMode(mode_str)
             env_class = _environment_registry[env_name]
-            self._environment = env_class(stage=stage, mode=mode, **self._cfg)
+            self._environment = env_class(stage=stage, mode=mode, cfg=self._cfg)
             self._environment.build_scene()
             self._environment.load()
             logger.info("Environment '%s' created and loaded", env_name)

@@ -11,9 +11,10 @@ class BaseEnvironment(ABC):
     (default no-op).
     """
 
-    def __init__(self, stage, mode: SimulatorMode) -> None:
+    def __init__(self, stage, mode: SimulatorMode, cfg: dict = None) -> None:
         self._stage = stage
         self._mode = mode
+        self._cfg = cfg or {}
 
     @abstractmethod
     def build_scene(self) -> None:
