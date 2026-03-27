@@ -65,3 +65,63 @@ class RendererConf:
             raise ValueError(
                 f"renderer must be 'RayTracedLighting' or 'PathTracing', got '{self.renderer}'"
             )
+
+
+from omegaconf import DictConfig, ListConfig, OmegaConf
+
+
+class ConfigFactory:
+    def __init__(self):
+        self._configs: dict[str, type] = {}
+
+    def register(self, name: str, config_class: type) -> None:
+        self._configs[name] = config_class
+
+    def create(self, name: str, **kwargs):
+        if name not in self._configs:
+            raise KeyError(f"Config '{name}' not registered. Available: {list(self._configs.keys())}")
+        return self._configs[name](**kwargs)
+
+    def registered_names(self) -> list[str]:
+        return list(self._configs.keys())
+
+
+def omegaconf_to_dict(d):
+    """Recursively convert OmegaConf DictConfig/ListConfig to plain Python dict/list."""
+    if isinstance(d, DictConfig):
+        return {k: omegaconf_to_dict(v) for k, v in d.items()}
+    elif isinstance(d, ListConfig):
+        return [omegaconf_to_dict(item) for item in d]
+    else:
+        return d
+
+
+def instantiate_configs(cfg: dict, factory: ConfigFactory) -> dict:
+    """Walk a config dict and instantiate any keys that match registered config names."""
+    registered = factory.registered_names()
+    result = {}
+    for k, v in cfg.items():
+        if isinstance(v, dict):
+            if k in registered:
+                result[k] = factory.create(k, **v)
+            else:
+                result[k] = instantiate_configs(v, factory)
+        else:
+            result[k] = v
+    return result
+
+
+def create_config_factory() -> ConfigFactory:
+    """Create a ConfigFactory populated with all Phase 1 config types."""
+    factory = ConfigFactory()
+    factory.register("physics_scene", PhysicsConf)
+    factory.register("renderer", RendererConf)
+    return factory
+
+
+# Register the as_tuple resolver for OmegaConf
+def _resolve_tuple(*args):
+    return tuple(args)
+
+
+OmegaConf.register_new_resolver("as_tuple", _resolve_tuple, replace=True)
