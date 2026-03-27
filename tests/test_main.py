@@ -8,6 +8,7 @@ from core.config_factory import (
     create_config_factory,
     PhysicsConf,
 )
+from rendering.config import RenderingConf
 
 
 class TestMainHelpers:
@@ -26,9 +27,6 @@ class TestMainHelpers:
             "rendering": {
                 "renderer": {
                     "renderer": "RayTracedLighting",
-                    "headless": False,
-                    "width": 1280,
-                    "height": 720,
                     "samples_per_pixel_per_frame": 32,
                     "max_bounces": 6,
                     "subdiv_refinement_level": 0,
@@ -42,4 +40,6 @@ class TestMainHelpers:
         assert isinstance(cfg_dict["physics_scene"], PhysicsConf)
         assert cfg_dict["physics_scene"].dt == 0.016666
         assert cfg_dict["physics_scene"].gravity == [0.0, 0.0, -1.62]
+        assert isinstance(cfg_dict["rendering"], RenderingConf)
+        assert cfg_dict["rendering"].renderer.renderer == "RayTracedLighting"
         assert cfg_dict["name"] == "LunarYard"
