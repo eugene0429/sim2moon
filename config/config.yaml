@@ -1,0 +1,9 @@
+defaults:
+  - environment: lunar_yard_40m
+  - rendering: ray_tracing
+  - physics: default
+
+hydra:
+  output_subdir: null
+  run:
+    dir: .

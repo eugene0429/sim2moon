@@ -1,0 +1,6 @@
+name: LunarYard
+seed: 42
+physics_dt: 0.0333
+rendering_dt: 0.0333
+enforce_realtime: true
+mode: ROS2

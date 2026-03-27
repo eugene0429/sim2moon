@@ -1,0 +1,9 @@
+rendering:
+  renderer:
+    renderer: RayTracedLighting
+    headless: false
+    width: 1280
+    height: 720
+    samples_per_pixel_per_frame: 32
+    max_bounces: 6
+    subdiv_refinement_level: 0
