@@ -112,10 +112,30 @@ def instantiate_configs(cfg: dict, factory: ConfigFactory) -> dict:
 
 
 def create_config_factory() -> ConfigFactory:
-    """Create a ConfigFactory populated with all Phase 1 config types."""
+    """Create a ConfigFactory populated with all known config types."""
+    from terrain.config import TerrainManagerConf, MoonYardConf
+    from celestial.config import StellarEngineConf, SunConf, EarthConf
+    from objects.config import RockManagerConf
+    from rendering.config import RenderingConf
+    from environments.lunar_yard_config import LunarYardConf
+
     factory = ConfigFactory()
+    # Core configs
     factory.register("physics_scene", PhysicsConf)
     factory.register("renderer", RendererConf)
+    # Terrain configs
+    factory.register("terrain_manager", TerrainManagerConf)
+    factory.register("moon_yard", MoonYardConf)
+    # Celestial configs
+    factory.register("stellar_engine_settings", StellarEngineConf)
+    factory.register("sun_settings", SunConf)
+    factory.register("earth_settings", EarthConf)
+    # Objects configs
+    factory.register("rocks_settings", RockManagerConf)
+    # Rendering configs
+    factory.register("rendering", RenderingConf)
+    # Environment configs
+    factory.register("lunaryard_settings", LunarYardConf)
     return factory
 
 
