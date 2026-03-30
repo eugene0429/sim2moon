@@ -208,3 +208,52 @@ class LandscapeBuilder:
         )
 
         return vertices, indices, uv_arr, final_resolution
+
+    def render(self, stage, pxr_utils, texture_path: str = "") -> None:
+        """Build mesh arrays and render as a USD mesh prim.
+
+        Args:
+            stage: USD stage.
+            pxr_utils: USD utility module.
+            texture_path: USD path to the material to apply.
+        """
+        vertices, indices, uvs, resolution = self.build_mesh_arrays()
+
+        if vertices.shape[0] == 0:
+            logger.warning("No landscape vertices to render")
+            return
+
+        try:
+            from pxr import UsdGeom, Sdf
+        except ImportError:
+            logger.warning("USD not available, skipping landscape render")
+            return
+
+        prim_path = self._conf.mesh_prim_path
+        pxr_utils.createXform(stage, prim_path, add_default_op=True)
+
+        mesh_path = f"{prim_path}/landscape_mesh"
+        mesh = UsdGeom.Mesh.Define(stage, mesh_path)
+
+        mesh.GetPointsAttr().Set(vertices)
+        tri_indices = np.array(indices).reshape(-1, 3)
+        mesh.GetFaceVertexIndicesAttr().Set(tri_indices)
+        mesh.GetFaceVertexCountsAttr().Set([3] * len(tri_indices))
+
+        # UVs
+        if uvs.shape[0] > 0:
+            pv = UsdGeom.PrimvarsAPI(mesh.GetPrim()).CreatePrimvar(
+                "st", Sdf.ValueTypeNames.Float2Array
+            )
+            pv.Set(uvs)
+            pv.SetInterpolation("faceVarying")
+
+        # Smooth shading
+        pxr_utils.enableSmoothShade(mesh)
+
+        # Apply material
+        material_path = texture_path or self._conf.texture_path
+        if material_path:
+            pxr_utils.applyMaterialFromPath(stage, mesh_path, material_path)
+
+        logger.info("Landscape mesh rendered at %s (%d verts)", mesh_path, vertices.shape[0])
