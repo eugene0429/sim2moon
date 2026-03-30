@@ -165,3 +165,65 @@ class TestDownsample:
 
         result = builder.downsample(dem, source_resolution=5.0)
         assert np.all(np.isnan(result[20:30, 20:30]))
+
+
+class TestBuildMeshArrays:
+    def test_build_produces_vertices_and_indices(self):
+        """Full pipeline: load → crop → hole → downsample → mesh arrays."""
+        tmpdir = tempfile.mkdtemp()
+        dem_dir = os.path.join(tmpdir, "test_dem")
+        os.makedirs(dem_dir)
+
+        # 200x200 at 5m/px = 1000m x 1000m
+        dem_data = np.ones((200, 200), dtype=np.float32) * 50.0
+        np.save(os.path.join(dem_dir, "dem.npy"), dem_data)
+        meta = {"center_coordinates": [0.0, -89.5], "pixel_size": [5.0, -5.0], "size": [200, 200]}
+        with open(os.path.join(dem_dir, "dem.yaml"), "w") as f:
+            yaml.dump(meta, f)
+
+        conf = LandscapeConf(
+            enable=True,
+            dem_path=dem_dir,
+            crop_size=500.0,     # 500m → 100x100 after crop
+            target_resolution=10.0,  # 2x downsample → 50x50
+            hole_margin=0.0,
+        )
+        builder = LandscapeBuilder(conf, main_terrain_size=(40.0, 40.0))
+
+        vertices, indices, uvs, resolution = builder.build_mesh_arrays()
+
+        # 50x50 grid with hole removed
+        assert vertices.ndim == 2
+        assert vertices.shape[1] == 3
+        assert len(indices) > 0
+        assert resolution == 10.0
+        # No NaN vertices should remain
+        assert not np.any(np.isnan(vertices))
+
+    def test_hole_vertices_excluded(self):
+        """Vertices in the hole region should not appear in output."""
+        tmpdir = tempfile.mkdtemp()
+        dem_dir = os.path.join(tmpdir, "test_dem")
+        os.makedirs(dem_dir)
+
+        dem_data = np.ones((100, 100), dtype=np.float32) * 10.0
+        np.save(os.path.join(dem_dir, "dem.npy"), dem_data)
+        meta = {"center_coordinates": [0.0, -89.5], "pixel_size": [5.0, -5.0], "size": [100, 100]}
+        with open(os.path.join(dem_dir, "dem.yaml"), "w") as f:
+            yaml.dump(meta, f)
+
+        conf = LandscapeConf(
+            enable=True,
+            dem_path=dem_dir,
+            crop_size=500.0,
+            target_resolution=5.0,  # no downsample
+            hole_margin=0.0,
+        )
+        builder = LandscapeBuilder(conf, main_terrain_size=(40.0, 40.0))
+        vertices, indices, uvs, resolution = builder.build_mesh_arrays()
+
+        total_pixels = 100 * 100
+        # Hole: 40m / 5m = 8px per side → 8*8 = 64 pixels removed
+        hole_pixels = 8 * 8
+        expected_verts = total_pixels - hole_pixels
+        assert vertices.shape[0] == expected_verts

@@ -132,3 +132,79 @@ class LandscapeBuilder:
             result = np.nanmean(blocks, axis=(1, 3)).astype(np.float32)
 
         return result
+
+    def build_mesh_arrays(self) -> Tuple[np.ndarray, list, np.ndarray, float]:
+        """Run the full pipeline and return mesh data arrays.
+
+        Returns:
+            Tuple of (vertices [N,3], triangle_indices list, uvs [F*3,2], resolution).
+        """
+        dem, meta = self.load_dem()
+        dem_resolution = abs(meta.get("pixel_size", [5.0, -5.0])[0])
+
+        # Crop
+        dem = self.crop_dem(dem, dem_resolution)
+        crop_extent = min(dem.shape[0], dem.shape[1]) * dem_resolution
+
+        # Cut hole
+        dem = self.cut_hole(dem, dem_resolution, crop_extent)
+
+        # Downsample
+        dem = self.downsample(dem, dem_resolution)
+        final_resolution = max(self._conf.target_resolution, dem_resolution)
+
+        # Build mesh arrays from DEM, skipping NaN pixels
+        h, w = dem.shape
+        valid_mask = ~np.isnan(dem)
+
+        # Vertex index map: -1 for invalid, sequential index for valid
+        index_map = np.full((h, w), -1, dtype=np.int32)
+        valid_coords = np.argwhere(valid_mask)  # [N, 2] — (row, col)
+        index_map[valid_mask] = np.arange(valid_coords.shape[0])
+
+        # Vertices: x = col * res, y = row * res, z = height
+        # Center the mesh so (0,0) is at the DEM center
+        cx = w / 2.0
+        cy = h / 2.0
+        vertices = np.zeros((valid_coords.shape[0], 3), dtype=np.float32)
+        vertices[:, 0] = (valid_coords[:, 1] - cx) * final_resolution
+        vertices[:, 1] = (valid_coords[:, 0] - cy) * final_resolution
+        vertices[:, 2] = dem[valid_coords[:, 0], valid_coords[:, 1]]
+
+        # Triangles: for each cell (r, c) where all 4 corners are valid, emit 2 tris
+        indices = []
+        uvs = []
+        for r in range(h - 1):
+            for c in range(w - 1):
+                i00 = index_map[r, c]
+                i10 = index_map[r, c + 1]
+                i01 = index_map[r + 1, c]
+                i11 = index_map[r + 1, c + 1]
+
+                if i00 < 0 or i10 < 0 or i01 < 0 or i11 < 0:
+                    continue
+
+                # Triangle 1: (r,c), (r+1,c), (r,c+1)
+                indices.extend([i00, i01, i10])
+                uvs.extend([
+                    (c / w, r / h),
+                    (c / w, (r + 1) / h),
+                    ((c + 1) / w, r / h),
+                ])
+
+                # Triangle 2: (r,c+1), (r+1,c), (r+1,c+1)
+                indices.extend([i10, i01, i11])
+                uvs.extend([
+                    ((c + 1) / w, r / h),
+                    (c / w, (r + 1) / h),
+                    ((c + 1) / w, (r + 1) / h),
+                ])
+
+        uv_arr = np.array(uvs, dtype=np.float32) if uvs else np.zeros((0, 2), dtype=np.float32)
+
+        logger.info(
+            "Landscape mesh: %d vertices, %d triangles (from %dx%d DEM at %.1fm/px)",
+            vertices.shape[0], len(indices) // 3, h, w, final_resolution,
+        )
+
+        return vertices, indices, uv_arr, final_resolution
