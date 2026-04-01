@@ -21,6 +21,7 @@ class CraterGeneratorConf:
     random_rotation: bool = True
     z_scale: float = 0.2
     seed: int = 42
+    crater_mode: str = "classic"
 
     def __post_init__(self):
         assert 0 < self.min_xy_ratio <= self.max_xy_ratio <= 1.0, (
@@ -29,6 +30,37 @@ class CraterGeneratorConf:
         assert self.resolution > 0, "resolution must be positive"
         assert self.pad_size >= 0, "pad_size must be non-negative"
         assert self.z_scale > 0, "z_scale must be positive"
+        assert self.crater_mode in ("classic", "realistic"), (
+            f"crater_mode must be 'classic' or 'realistic', got '{self.crater_mode}'"
+        )
+
+
+@dataclasses.dataclass
+class RealisticCraterConf:
+    """Parameters for realistic crater shape deformation."""
+
+    n_harmonics: int = 4
+    harmonic_amp: float = 0.12
+    contour_noise_amp: float = 0.03
+    rim_n_harmonics: int = 3
+    rim_noise_amp: float = 0.15
+    slump_intensity: float = 0.1
+    slump_wall_range: Tuple[float, float] = (0.3, 0.8)
+    floor_noise_amp: float = 0.03
+    floor_radius_ratio: float = 0.3
+
+    def __post_init__(self):
+        assert self.n_harmonics > 0, "n_harmonics must be positive"
+        assert self.harmonic_amp >= 0, "harmonic_amp must be non-negative"
+        assert self.contour_noise_amp >= 0, "contour_noise_amp must be non-negative"
+        assert self.rim_n_harmonics > 0, "rim_n_harmonics must be positive"
+        assert self.rim_noise_amp >= 0, "rim_noise_amp must be non-negative"
+        assert self.slump_intensity >= 0, "slump_intensity must be non-negative"
+        assert self.slump_wall_range[0] < self.slump_wall_range[1], (
+            "slump_wall_range[0] must be less than slump_wall_range[1]"
+        )
+        assert self.floor_noise_amp >= 0, "floor_noise_amp must be non-negative"
+        assert 0 <= self.floor_radius_ratio <= 1, "floor_radius_ratio must be in [0, 1]"
 
 
 @dataclasses.dataclass
@@ -196,6 +228,9 @@ class MoonYardConf:
     deformation_engine: DeformationEngineConf = dataclasses.field(
         default_factory=DeformationEngineConf
     )
+    realistic_crater: RealisticCraterConf = dataclasses.field(
+        default_factory=RealisticCraterConf
+    )
     is_yard: bool = True
     is_lab: bool = False
 
@@ -208,6 +243,8 @@ class MoonYardConf:
             self.base_terrain_generator = BaseTerrainGeneratorConf(**self.base_terrain_generator)
         if isinstance(self.deformation_engine, dict):
             self.deformation_engine = DeformationEngineConf(**self.deformation_engine)
+        if isinstance(self.realistic_crater, dict):
+            self.realistic_crater = RealisticCraterConf(**self.realistic_crater)
 
 
 @dataclasses.dataclass
