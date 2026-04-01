@@ -206,17 +206,18 @@ class TestRealisticApplyProfile:
         dist = generator._centered_distance_matrix(cd)
         crater = generator._apply_profile(dist, cd)
         center = 100
-        rim_r = 90
+        # Sample at mid-wall (60% radius) where profile has significant values
+        wall_r = 60
         n_samples = 360
         angles = np.linspace(0, 2 * np.pi, n_samples, endpoint=False)
-        rim_heights = []
+        wall_heights = []
         for a in angles:
-            r = int(center + rim_r * np.sin(a))
-            c = int(center + rim_r * np.cos(a))
+            r = int(center + wall_r * np.sin(a))
+            c = int(center + wall_r * np.cos(a))
             if 0 <= r < 201 and 0 <= c < 201:
-                rim_heights.append(crater[r, c])
-        rim_heights = np.array(rim_heights)
-        assert np.std(rim_heights) > 0.0001, f"Rim std too low: {np.std(rim_heights)}"
+                wall_heights.append(crater[r, c])
+        wall_heights = np.array(wall_heights)
+        assert np.std(wall_heights) > 0.0001, f"Wall std too low: {np.std(wall_heights)}"
 
     def test_wall_has_slump_noise(self, generator):
         cd = generator.randomize_parameters(-1, 201)

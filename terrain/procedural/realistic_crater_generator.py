@@ -152,7 +152,7 @@ class RealisticCraterGenerator(CraterGenerator):
                 harm_n * theta + cd.rim_phases[i]
             )
 
-        crater = base + base * (rim_scale - 1) + (rim_scale - 1) * rc.rim_noise_amp
+        crater = base * rim_scale
 
         # Layer 2: Wall slump noise
         r_norm = 2 * distance / n
@@ -162,9 +162,11 @@ class RealisticCraterGenerator(CraterGenerator):
             * (1 - self._smooth_step(r_norm, wall_hi - 0.05, wall_hi + 0.05))
         )
 
-        slump_noise = perlin_1d(
-            r_norm.ravel(), freq=8.0, seed=cd.slump_noise_seed
-        ).reshape(r_norm.shape)
+        # Use 2D noise so slumps vary spatially, not concentrically
+        x_wall, y_wall = np.meshgrid(
+            np.linspace(0, n * 0.15, n), np.linspace(0, n * 0.15, n)
+        )
+        slump_noise = perlin_2d(x_wall, y_wall, freq=1.0, seed=cd.slump_noise_seed)
         crater += slump_noise * rc.slump_intensity * wall_mask
 
         # Layer 3: Floor roughness
