@@ -246,3 +246,132 @@ class TestRealisticApplyProfile:
         dist = generator._centered_distance_matrix(cd)
         crater = generator._apply_profile(dist, cd)
         assert not np.any(np.isnan(crater))
+
+
+class TestRealisticEndToEnd:
+    @pytest.fixture
+    def generator(self):
+        cfg = CraterGeneratorConf(
+            profiles_path="assets/Terrains/crater_spline_profiles.pkl",
+            crater_mode="realistic", seed=42,
+        )
+        rcfg = RealisticCraterConf()
+        return RealisticCraterGenerator(cfg, rcfg)
+
+    def test_generate_single_returns_tuple(self, generator):
+        crater, cd = generator.generate_single(size=101)
+        assert isinstance(crater, np.ndarray)
+        assert isinstance(cd, RealisticCraterData)
+        assert crater.shape == (101, 101)
+
+    def test_generate_single_no_nans(self, generator):
+        crater, cd = generator.generate_single(size=201)
+        assert not np.any(np.isnan(crater))
+
+    def test_generate_single_has_depression(self, generator):
+        crater, cd = generator.generate_single(size=201)
+        assert np.min(crater) < 0
+
+    def test_generate_craters_on_dem(self, generator):
+        # DEM is 500x500 px at default 0.02 m/px = 10m x 10m physical extent.
+        # Coords in meters must be within the DEM's extent; radii must be small enough.
+        dem = np.zeros((500, 500), dtype=np.float32)
+        coords = np.array([[3.0, 3.0], [7.0, 7.0]], dtype=np.float64)
+        radii = np.array([0.5, 0.4], dtype=np.float64)
+        dem_out, mask, craters_data = generator.generate_craters(dem, coords, radii)
+        assert dem_out.shape == (500, 500)
+        assert mask.shape == (500, 500)
+        assert len(craters_data) == 2
+        assert all(isinstance(cd, RealisticCraterData) for cd in craters_data)
+
+    def test_generate_craters_modifies_dem(self, generator):
+        # DEM is 500x500 px at default 0.02 m/px = 10m x 10m physical extent.
+        dem = np.zeros((500, 500), dtype=np.float32)
+        coords = np.array([[3.0, 3.0]], dtype=np.float64)
+        radii = np.array([0.5], dtype=np.float64)
+        dem_out, _, _ = generator.generate_craters(dem, coords, radii)
+        assert not np.allclose(dem_out, 0.0)
+
+    def test_reproducible_with_crater_data(self, generator):
+        crater1, cd = generator.generate_single(size=101)
+        crater2, _ = generator.generate_single(crater_data=cd)
+        np.testing.assert_array_almost_equal(crater1, crater2)
+
+    def test_interface_compatible_with_parent(self, generator):
+        # DEM is 200x200 px at default 0.02 m/px = 4m x 4m physical extent.
+        dem = np.zeros((200, 200), dtype=np.float32)
+        coords = np.array([[2.0, 2.0]], dtype=np.float64)
+        radii = np.array([0.3], dtype=np.float64)
+        result = generator.generate_craters(dem, coords, radii)
+        assert len(result) == 3
+        dem_out, mask_out, cd_list = result
+        assert isinstance(dem_out, np.ndarray)
+        assert isinstance(mask_out, np.ndarray)
+        assert isinstance(cd_list, list)
+
+
+class TestMoonyardIntegration:
+    def test_realistic_mode_uses_realistic_generator(self):
+        from terrain.procedural.moonyard_generator import MoonyardGenerator
+        cfg = MoonYardConf(
+            crater_generator=CraterGeneratorConf(
+                profiles_path="assets/Terrains/crater_spline_profiles.pkl",
+                crater_mode="realistic", seed=42,
+            ),
+            realistic_crater=RealisticCraterConf(),
+            crater_distribution={"x_size": 10.0, "y_size": 10.0, "densities": [0.1], "radius": [[0.5, 1.0]], "seed": 42},
+            base_terrain_generator={"x_size": 10.0, "y_size": 10.0, "resolution": 0.05, "seed": 42},
+        )
+        gen = MoonyardGenerator(cfg)
+        assert isinstance(gen._crater_gen, RealisticCraterGenerator)
+
+    def test_classic_mode_uses_classic_generator(self):
+        from terrain.procedural.moonyard_generator import MoonyardGenerator
+        cfg = MoonYardConf(
+            crater_generator=CraterGeneratorConf(
+                profiles_path="assets/Terrains/crater_spline_profiles.pkl",
+                crater_mode="classic", seed=42,
+            ),
+        )
+        gen = MoonyardGenerator(cfg)
+        from terrain.procedural.crater_generator import CraterGenerator
+        assert isinstance(gen._crater_gen, CraterGenerator)
+        assert not isinstance(gen._crater_gen, RealisticCraterGenerator)
+
+    def test_randomize_with_realistic_mode(self):
+        from terrain.procedural.moonyard_generator import MoonyardGenerator
+        cfg = MoonYardConf(
+            crater_generator=CraterGeneratorConf(
+                profiles_path="assets/Terrains/crater_spline_profiles.pkl",
+                crater_mode="realistic", seed=42,
+            ),
+            realistic_crater=RealisticCraterConf(),
+            crater_distribution={"x_size": 10.0, "y_size": 10.0, "densities": [0.1], "radius": [[0.5, 1.0]], "seed": 42},
+            base_terrain_generator={"x_size": 10.0, "y_size": 10.0, "resolution": 0.05, "seed": 42},
+        )
+        gen = MoonyardGenerator(cfg)
+        dem, mask, craters_data = gen.randomize()
+        assert dem.shape[0] > 0
+        assert not np.any(np.isnan(dem))
+        if len(craters_data) > 0:
+            assert isinstance(craters_data[0], RealisticCraterData)
+
+
+class TestYAMLConfig:
+    def test_realistic_rocks_yaml_loads(self):
+        import yaml
+        with open("config/environment/lunar_yard_40m_realistic_rocks.yaml") as f:
+            raw = yaml.safe_load(f)
+        tm = raw["terrain_manager"]
+        assert tm["moon_yard"]["crater_generator"]["crater_mode"] == "realistic"
+        rc = tm["moon_yard"]["realistic_crater"]
+        assert rc["n_harmonics"] == 4
+
+    def test_realistic_rocks_yaml_creates_valid_conf(self):
+        import yaml
+        with open("config/environment/lunar_yard_40m_realistic_rocks.yaml") as f:
+            raw = yaml.safe_load(f)
+        my = raw["terrain_manager"]["moon_yard"]
+        conf = MoonYardConf(**my)
+        assert conf.crater_generator.crater_mode == "realistic"
+        assert conf.realistic_crater.n_harmonics == 4
