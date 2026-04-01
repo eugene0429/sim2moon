@@ -140,3 +140,109 @@ class TestRealisticRandomizeParameters:
         cd2 = gen2.randomize_parameters(-1, 101)
         np.testing.assert_array_equal(cd1.harmonic_amplitudes, cd2.harmonic_amplitudes)
         np.testing.assert_array_equal(cd1.rim_amplitudes, cd2.rim_amplitudes)
+
+
+class TestRealisticDistanceMatrix:
+    @pytest.fixture
+    def generator(self):
+        cfg = CraterGeneratorConf(
+            profiles_path="assets/Terrains/crater_spline_profiles.pkl",
+            crater_mode="realistic",
+            seed=42,
+        )
+        rcfg = RealisticCraterConf(n_harmonics=4, harmonic_amp=0.12, contour_noise_amp=0.03)
+        return RealisticCraterGenerator(cfg, rcfg)
+
+    def test_output_shape(self, generator):
+        cd = generator.randomize_parameters(-1, 101)
+        dist = generator._centered_distance_matrix(cd)
+        assert dist.shape == (101, 101)
+
+    def test_contour_is_irregular(self, generator):
+        """Distance values along a circle should vary (not uniform)."""
+        cd = generator.randomize_parameters(-1, 201)
+        dist = generator._centered_distance_matrix(cd)
+        center = 100
+        radius = 70
+        n_samples = 360
+        angles = np.linspace(0, 2 * np.pi, n_samples, endpoint=False)
+        ring_vals = []
+        for a in angles:
+            r, c = int(center + radius * np.sin(a)), int(center + radius * np.cos(a))
+            if 0 <= r < 201 and 0 <= c < 201:
+                ring_vals.append(dist[r, c])
+        ring_vals = np.array(ring_vals)
+        assert np.std(ring_vals) > 1.0, f"Ring std too low: {np.std(ring_vals)}"
+
+    def test_center_is_zero(self, generator):
+        cd = generator.randomize_parameters(-1, 101)
+        dist = generator._centered_distance_matrix(cd)
+        center = cd.size // 2
+        assert dist[center, center] < 5.0
+
+    def test_clamped_to_half_size(self, generator):
+        cd = generator.randomize_parameters(-1, 101)
+        dist = generator._centered_distance_matrix(cd)
+        assert np.all(dist <= cd.size / 2 + 0.5)
+
+
+class TestRealisticApplyProfile:
+    @pytest.fixture
+    def generator(self):
+        cfg = CraterGeneratorConf(
+            profiles_path="assets/Terrains/crater_spline_profiles.pkl",
+            crater_mode="realistic",
+            seed=42,
+        )
+        rcfg = RealisticCraterConf(
+            rim_noise_amp=0.15,
+            slump_intensity=0.1,
+            floor_noise_amp=0.03,
+        )
+        return RealisticCraterGenerator(cfg, rcfg)
+
+    def test_rim_height_varies_azimuthally(self, generator):
+        cd = generator.randomize_parameters(-1, 201)
+        dist = generator._centered_distance_matrix(cd)
+        crater = generator._apply_profile(dist, cd)
+        center = 100
+        rim_r = 90
+        n_samples = 360
+        angles = np.linspace(0, 2 * np.pi, n_samples, endpoint=False)
+        rim_heights = []
+        for a in angles:
+            r = int(center + rim_r * np.sin(a))
+            c = int(center + rim_r * np.cos(a))
+            if 0 <= r < 201 and 0 <= c < 201:
+                rim_heights.append(crater[r, c])
+        rim_heights = np.array(rim_heights)
+        assert np.std(rim_heights) > 0.0001, f"Rim std too low: {np.std(rim_heights)}"
+
+    def test_wall_has_slump_noise(self, generator):
+        cd = generator.randomize_parameters(-1, 201)
+        dist = generator._centered_distance_matrix(cd)
+        crater = generator._apply_profile(dist, cd)
+        center = 100
+        wall_vals = crater[center, 50:90]
+        diffs = np.diff(wall_vals)
+        assert np.std(diffs) > 0.0, "Wall region has no variation"
+
+    def test_floor_has_noise(self, generator):
+        cd = generator.randomize_parameters(-1, 201)
+        dist = generator._centered_distance_matrix(cd)
+        crater = generator._apply_profile(dist, cd)
+        center = 100
+        floor_patch = crater[center - 15:center + 15, center - 15:center + 15]
+        assert np.std(floor_patch) > 0.0, "Floor is perfectly flat"
+
+    def test_output_shape(self, generator):
+        cd = generator.randomize_parameters(-1, 101)
+        dist = generator._centered_distance_matrix(cd)
+        crater = generator._apply_profile(dist, cd)
+        assert crater.shape == (101, 101)
+
+    def test_no_nans(self, generator):
+        cd = generator.randomize_parameters(-1, 201)
+        dist = generator._centered_distance_matrix(cd)
+        crater = generator._apply_profile(dist, cd)
+        assert not np.any(np.isnan(crater))
