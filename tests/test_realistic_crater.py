@@ -59,3 +59,84 @@ class TestMoonYardConfRealistic:
     def test_from_dict_with_realistic(self):
         conf = MoonYardConf(realistic_crater={"n_harmonics": 5})
         assert conf.realistic_crater.n_harmonics == 5
+
+
+from terrain.procedural.realistic_crater_generator import (
+    RealisticCraterData,
+    RealisticCraterGenerator,
+)
+from terrain.procedural.crater_generator import CraterData, CraterGenerator
+
+
+class TestRealisticCraterData:
+    def test_inherits_crater_data(self):
+        rcd = RealisticCraterData()
+        assert isinstance(rcd, CraterData)
+
+    def test_has_harmonic_fields(self):
+        rcd = RealisticCraterData()
+        assert hasattr(rcd, "harmonic_amplitudes")
+        assert hasattr(rcd, "harmonic_phases")
+        assert hasattr(rcd, "contour_noise_seed")
+
+    def test_has_rim_fields(self):
+        rcd = RealisticCraterData()
+        assert hasattr(rcd, "rim_amplitudes")
+        assert hasattr(rcd, "rim_phases")
+
+    def test_has_slump_and_floor_fields(self):
+        rcd = RealisticCraterData()
+        assert hasattr(rcd, "slump_noise_seed")
+        assert hasattr(rcd, "floor_noise_seed")
+
+
+class TestRealisticRandomizeParameters:
+    @pytest.fixture
+    def generator(self):
+        cfg = CraterGeneratorConf(
+            profiles_path="assets/Terrains/crater_spline_profiles.pkl",
+            crater_mode="realistic",
+            seed=42,
+        )
+        rcfg = RealisticCraterConf(n_harmonics=4, rim_n_harmonics=3)
+        return RealisticCraterGenerator(cfg, rcfg)
+
+    def test_returns_realistic_crater_data(self, generator):
+        cd = generator.randomize_parameters(-1, 101)
+        assert isinstance(cd, RealisticCraterData)
+
+    def test_harmonic_amplitudes_shape(self, generator):
+        cd = generator.randomize_parameters(-1, 101)
+        assert cd.harmonic_amplitudes.shape == (4,)
+        assert cd.harmonic_phases.shape == (4,)
+
+    def test_rim_amplitudes_shape(self, generator):
+        cd = generator.randomize_parameters(-1, 101)
+        assert cd.rim_amplitudes.shape == (3,)
+        assert cd.rim_phases.shape == (3,)
+
+    def test_noise_seeds_are_integers(self, generator):
+        cd = generator.randomize_parameters(-1, 101)
+        assert isinstance(cd.contour_noise_seed, (int, np.integer))
+        assert isinstance(cd.slump_noise_seed, (int, np.integer))
+        assert isinstance(cd.floor_noise_seed, (int, np.integer))
+
+    def test_preserves_base_fields(self, generator):
+        cd = generator.randomize_parameters(-1, 101)
+        assert cd.size == 101
+        assert cd.deformation_spline is not None
+        assert cd.marks_spline is not None
+
+    def test_reproducible_with_same_seed(self):
+        cfg = CraterGeneratorConf(
+            profiles_path="assets/Terrains/crater_spline_profiles.pkl",
+            crater_mode="realistic",
+            seed=42,
+        )
+        rcfg = RealisticCraterConf()
+        gen1 = RealisticCraterGenerator(cfg, rcfg)
+        gen2 = RealisticCraterGenerator(cfg, rcfg)
+        cd1 = gen1.randomize_parameters(-1, 101)
+        cd2 = gen2.randomize_parameters(-1, 101)
+        np.testing.assert_array_equal(cd1.harmonic_amplitudes, cd2.harmonic_amplitudes)
+        np.testing.assert_array_equal(cd1.rim_amplitudes, cd2.rim_amplitudes)
