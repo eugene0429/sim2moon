@@ -12,7 +12,7 @@ from typing import List, Optional, Tuple
 
 import cv2
 import numpy as np
-from scipy.interpolate import CubicSpline
+from scipy.interpolate import CubicSpline, PPoly
 from scipy.ndimage import rotate
 
 from terrain.config import CraterGeneratorConf
@@ -51,13 +51,10 @@ class CraterGenerator:
     def _load_profiles(self) -> None:
         """Load half-crater spline profiles from a pickle file.
 
-        Reconstructs CubicSpline objects from raw knot/coefficient data to
-        handle scipy version mismatches in pickled objects.
+        Uses PPoly to reconstruct from raw coefficients, avoiding scipy
+        version mismatch issues with pickled CubicSpline objects.
         """
-        # Use a custom unpickler to capture raw slot data from profiles
-        # that were pickled with a different scipy version. A dummy class
-        # receives the state dict (with 'x', 'c', etc.) without triggering
-        # any property descriptors on the real CubicSpline class.
+
         class _RawSpline:
             pass
 
@@ -70,16 +67,7 @@ class CraterGenerator:
         with open(self._profiles_path, "rb") as f:
             raw_profiles = _SafeUnpickler(f).load()
 
-        self._profiles = []
-        for p in raw_profiles:
-            x = p.x
-            c = p.c
-            # Recover y-values at each knot from the piecewise polynomial
-            y = np.empty(len(x))
-            y[:-1] = c[3, :]  # constant coefficient = value at left endpoint
-            dx = x[-1] - x[-2]
-            y[-1] = c[0, -1] * dx**3 + c[1, -1] * dx**2 + c[2, -1] * dx + c[3, -1]
-            self._profiles.append(CubicSpline(x, y))
+        self._profiles = [PPoly(p.c, p.x) for p in raw_profiles]
 
     @staticmethod
     def _saturated_gaussian(
