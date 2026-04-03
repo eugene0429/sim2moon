@@ -10,13 +10,13 @@ class TestRealisticCraterConf:
     def test_defaults(self):
         conf = RealisticCraterConf()
         assert conf.n_harmonics == 4
-        assert conf.harmonic_amp == 0.12
-        assert conf.contour_noise_amp == 0.03
+        assert conf.harmonic_amp == 0.08
+        assert conf.contour_noise_amp == 0.02
         assert conf.rim_n_harmonics == 3
-        assert conf.rim_noise_amp == 0.15
-        assert conf.slump_intensity == 0.1
+        assert conf.rim_noise_amp == 0.04
+        assert conf.slump_intensity == 0.02
         assert conf.slump_wall_range == (0.3, 0.8)
-        assert conf.floor_noise_amp == 0.03
+        assert conf.floor_noise_amp == 0.01
         assert conf.floor_radius_ratio == 0.3
 
     def test_from_dict(self):

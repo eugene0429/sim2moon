@@ -1,0 +1,162 @@
+# @package _global_
+name: LunarYard
+seed: 42
+physics_dt: 0.0333
+rendering_dt: 0.0333
+enforce_realtime: true
+mode: ROS2
+
+lunaryard_settings:
+  lab_length: 40.0
+  lab_width: 40.0
+  resolution: 0.02
+  root_path: /LunarYard
+  coordinates:
+    latitude: 46.8
+    longitude: -26.3
+
+terrain_manager:
+  sim_length: 40.0
+  sim_width: 40.0
+  resolution: 0.02
+  root_path: /LunarYard
+  texture_path: /LunarYard/Looks/LunarRegolith8k
+  dems_path: Terrains/Lunaryard
+  moon_yard:
+    is_yard: false
+    is_lab: true
+    crater_generator:
+      crater_mode: "realistic"
+      profiles_path: assets/Terrains/crater_spline_profiles.pkl
+      z_scale: 0.2
+      seed: 42
+    realistic_crater:
+      n_harmonics: 4
+      harmonic_amp: 0.08
+      contour_noise_amp: 0.02
+      rim_n_harmonics: 3
+      rim_noise_amp: 0.04
+      slump_intensity: 0.02
+      floor_noise_amp: 0.01
+    crater_distribution:
+      x_size: 40.0
+      y_size: 40.0
+      densities: [0.01, 0.02, 0.03]
+      radius: [[1.5, 2.5], [0.75, 1.5], [0.25, 0.5]]
+      seed: 42
+    base_terrain_generator:
+      x_size: 40.0
+      y_size: 40.0
+      resolution: 0.02
+      max_elevation: 0.5
+      min_elevation: -0.5
+      z_scale: 0.8
+      seed: 42
+    deformation_engine:
+      enable: false
+      terrain_resolution: 0.02
+      terrain_width: 40.0
+      terrain_height: 40.0
+
+stellar_engine_settings:
+  start_date:
+    year: 2024
+    month: 5
+    day: 1
+    hour: 12
+    minute: 50
+  time_scale: 1
+  update_interval: 600
+  ephemeris_path: assets/Ephemeris
+
+sun_settings:
+  intensity: 1750.0
+  angle: 0.53
+  color: [1.0, 1.0, 1.0]
+  temperature: 6500.0
+  azimuth: 180.0
+  elevation: 45.0
+
+earth_settings:
+  texture_path: assets/Textures/Earth/earth_color_with_clouds.tif
+  scale: 50.0
+  enable: true
+
+# Realistic rock distribution: crater rim ejecta + power-law sizes + overlap prevention
+rocks_settings:
+  enable: true
+  instancers_path: /LunarYard/Rocks
+  assets_root: assets/USD_Assets/rocks
+  rocks_settings:
+    crater_ejecta:
+      seed: 42
+      collections: ["apollo_rocks"]
+      realistic_distribution:
+        method: crater_ejecta
+        resolution: 0.02
+        min_gap: 0.05
+        min_crater_radius: 1.5
+        rocks_per_crater: 15
+        rim_inner_ratio: 0.8
+        rim_outer_ratio: 2.5
+        decay_power: 2.0
+        d_min: 3.0
+        d_max: 8.0
+        alpha: 2.2
+
+    crater_wall_debris:
+      seed: 42
+      collections: ["apollo_rocks"]
+      realistic_distribution:
+        method: crater_wall_debris
+        resolution: 0.02
+        min_gap: 0.03
+        min_crater_radius: 1.5
+        rocks_per_crater: 20
+        inner_radius_ratio: 0.1
+        outer_radius_ratio: 0.9
+        wall_bias: 2.0
+        d_min: 1.0
+        d_max: 5.0
+        alpha: 2.5
+
+    background_medium:
+      seed: 42
+      collections: ["apollo_rocks"]
+      realistic_distribution:
+        method: clustered_scatter
+        resolution: 0.02
+        min_gap: 0.03
+        lambda_parent: 0.2
+        lambda_daughter: 4
+        sigma: 10.0
+        d_min: 0.5
+        d_max: 2.0
+        alpha: 2.8
+
+    background_small:
+      seed: 42
+      collections: ["apollo_rocks"]
+      realistic_distribution:
+        method: background_scatter
+        resolution: 0.02
+        min_gap: 0.01
+        density: 0.5
+        d_min: 0.2
+        d_max: 1.0
+        alpha: 3.0
+
+robots_settings:
+  uses_nucleus: false
+  is_ROS2: true
+  max_robots: 5
+  robots_root: "/Robots"
+  parameters:
+    - robot_name: husky
+      usd_path: assets/USD_Assets/robots/ros2_husky_PhysX_vlp16.usd
+      pose:
+        position: [5.0, 5.0, 0.5]
+        orientation: [1, 0, 0, 0]
+      domain_id: 0
+      target_links: ["front_left_wheel_link", "front_right_wheel_link", "rear_left_wheel_link", "rear_right_wheel_link"]
+      base_link: "base_link"

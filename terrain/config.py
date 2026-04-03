@@ -40,13 +40,13 @@ class RealisticCraterConf:
     """Parameters for realistic crater shape deformation."""
 
     n_harmonics: int = 4
-    harmonic_amp: float = 0.12
-    contour_noise_amp: float = 0.03
+    harmonic_amp: float = 0.08
+    contour_noise_amp: float = 0.02
     rim_n_harmonics: int = 3
-    rim_noise_amp: float = 0.15
-    slump_intensity: float = 0.1
+    rim_noise_amp: float = 0.04
+    slump_intensity: float = 0.02
     slump_wall_range: Tuple[float, float] = (0.3, 0.8)
-    floor_noise_amp: float = 0.03
+    floor_noise_amp: float = 0.01
     floor_radius_ratio: float = 0.3
 
     def __post_init__(self):
