@@ -14,6 +14,7 @@ from scipy.ndimage import rotate
 
 from terrain.config import CraterGeneratorConf, RealisticCraterConf
 from terrain.procedural.crater_generator import CraterData, CraterGenerator
+from terrain.procedural.noise import perlin_1d
 
 
 @dataclasses.dataclass
@@ -141,15 +142,29 @@ class RealisticCraterGenerator(CraterGenerator):
         outer_offset = np.argmax(slope_1d[peak_idx:] < threshold)
         shoulder_r = r_1d[peak_idx + outer_offset]
 
-        # Low-frequency azimuthal perturbation at the shoulder
+        # fBm-like azimuthal perturbation at the shoulder:
+        # Harmonics give broad shape, periodic Perlin adds natural irregularity.
+        # Multiple Perlin octaves with decaying amplitude for fractal detail.
         x_lin, y_lin = np.meshgrid(np.linspace(-1, 1, n), np.linspace(-1, 1, n))
         theta = np.arctan2(y_lin, x_lin)
 
         perturbation = np.zeros_like(theta)
+        # Broad shape from harmonics
         for i, harm_n in enumerate(range(2, 2 + rc.rim_n_harmonics)):
             perturbation += cd.rim_amplitudes[i] * np.cos(
                 harm_n * theta + cd.rim_phases[i]
             )
+        # Natural detail from octaved periodic Perlin noise
+        theta_shifted = theta + np.pi  # [0, 2π]
+        amp = rc.rim_noise_amp * 0.5
+        for octave in range(3):
+            freq = 2.0 * (2 ** octave)  # 2, 4, 8
+            perturbation += amp * perlin_1d(
+                theta_shifted.ravel(), freq=freq,
+                period=2 * np.pi,
+                seed=cd.contour_noise_seed + octave,
+            ).reshape(theta.shape)
+            amp *= 0.5  # each octave halves in amplitude
 
         # Narrow mask centered on the shoulder (±0.08 around the peak-slope radius)
         shoulder_mask = self._smooth_step(r_norm, shoulder_r - 0.10, shoulder_r - 0.02) * (
