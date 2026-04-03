@@ -164,10 +164,8 @@ class RealisticCraterGenerator(CraterGenerator):
             ).reshape(theta.shape)
             amp *= 0.5
 
-        # Apply offset only at the shoulder line (very tight gaussian)
-        sigma = 0.008
-        weight = np.exp(-0.5 * ((r_norm - shoulder_r) / sigma) ** 2)
+        # Add height perturbation at the shoulder line only (~2 pixels wide)
+        pixel_size = 2.0 / n
+        thin_mask = np.exp(-0.5 * ((r_norm - shoulder_r) / pixel_size) ** 2)
 
-        # Evaluate profile at shifted radial position
-        r_shifted = r_norm + radial_offset * weight
-        return self._profiles[cd.crater_profile_id](np.clip(r_shifted, 0, 1))
+        return base + radial_offset * thin_mask
