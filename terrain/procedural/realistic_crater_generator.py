@@ -164,8 +164,8 @@ class RealisticCraterGenerator(CraterGenerator):
             ).reshape(theta.shape)
             amp *= 0.5
 
-        # Apply offset only near shoulder (gaussian fade, not a hard band)
-        sigma = 0.04
+        # Apply offset only at the shoulder line (very tight gaussian)
+        sigma = 0.008
         weight = np.exp(-0.5 * ((r_norm - shoulder_r) / sigma) ** 2)
 
         # Evaluate profile at shifted radial position
