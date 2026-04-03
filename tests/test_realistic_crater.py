@@ -194,47 +194,25 @@ class TestRealisticApplyProfile:
             crater_mode="realistic",
             seed=42,
         )
-        rcfg = RealisticCraterConf(
-            rim_noise_amp=0.15,
-            slump_intensity=0.1,
-            floor_noise_amp=0.03,
-        )
+        rcfg = RealisticCraterConf(rim_noise_amp=0.04)
         return RealisticCraterGenerator(cfg, rcfg)
 
-    def test_rim_height_varies_azimuthally(self, generator):
+    def test_rim_crest_varies_azimuthally(self, generator):
+        """Rim crest region should have azimuthal height variation."""
         cd = generator.randomize_parameters(-1, 201)
         dist = generator._centered_distance_matrix(cd)
         crater = generator._apply_profile(dist, cd)
         center = 100
-        # Sample at mid-wall (60% radius) where profile has significant values
-        wall_r = 60
-        n_samples = 360
-        angles = np.linspace(0, 2 * np.pi, n_samples, endpoint=False)
-        wall_heights = []
+        # Sample at rim crest (~90% radius)
+        rim_r = 90
+        angles = np.linspace(0, 2 * np.pi, 360, endpoint=False)
+        rim_heights = []
         for a in angles:
-            r = int(center + wall_r * np.sin(a))
-            c = int(center + wall_r * np.cos(a))
+            r = int(center + rim_r * np.sin(a))
+            c = int(center + rim_r * np.cos(a))
             if 0 <= r < 201 and 0 <= c < 201:
-                wall_heights.append(crater[r, c])
-        wall_heights = np.array(wall_heights)
-        assert np.std(wall_heights) > 0.0001, f"Wall std too low: {np.std(wall_heights)}"
-
-    def test_wall_has_slump_noise(self, generator):
-        cd = generator.randomize_parameters(-1, 201)
-        dist = generator._centered_distance_matrix(cd)
-        crater = generator._apply_profile(dist, cd)
-        center = 100
-        wall_vals = crater[center, 50:90]
-        diffs = np.diff(wall_vals)
-        assert np.std(diffs) > 0.0, "Wall region has no variation"
-
-    def test_floor_has_noise(self, generator):
-        cd = generator.randomize_parameters(-1, 201)
-        dist = generator._centered_distance_matrix(cd)
-        crater = generator._apply_profile(dist, cd)
-        center = 100
-        floor_patch = crater[center - 15:center + 15, center - 15:center + 15]
-        assert np.std(floor_patch) > 0.0, "Floor is perfectly flat"
+                rim_heights.append(crater[r, c])
+        assert np.std(rim_heights) > 0.0, "Rim crest has no azimuthal variation"
 
     def test_output_shape(self, generator):
         cd = generator.randomize_parameters(-1, 101)

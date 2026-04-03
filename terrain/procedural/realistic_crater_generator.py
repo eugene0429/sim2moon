@@ -16,7 +16,6 @@ from scipy.ndimage import rotate
 
 from terrain.config import CraterGeneratorConf, RealisticCraterConf
 from terrain.procedural.crater_generator import CraterData, CraterGenerator
-from terrain.procedural.noise import perlin_1d, perlin_2d
 
 
 @dataclasses.dataclass
@@ -90,22 +89,12 @@ class RealisticCraterGenerator(CraterGenerator):
         x_lin, y_lin = np.meshgrid(np.linspace(-1, 1, n), np.linspace(-1, 1, n))
         theta = np.arctan2(y_lin, x_lin)
 
-        # Harmonic contour perturbation
+        # Low-frequency harmonic contour perturbation (outline deformation only)
         contour = np.ones_like(theta)
         for i, harm_n in enumerate(range(2, 2 + rc.n_harmonics)):
             contour += cd.harmonic_amplitudes[i] * np.cos(
                 harm_n * theta + cd.harmonic_phases[i]
             )
-
-        # High-freq Perlin noise on contour (periodic over 2π)
-        theta_flat = theta.ravel()
-        noise = perlin_1d(
-            theta_flat + np.pi,
-            freq=3.0,
-            period=2 * np.pi,
-            seed=cd.contour_noise_seed,
-        ).reshape(theta.shape)
-        contour += noise * rc.contour_noise_amp
 
         # Euclidean distance with elliptical deformation
         x_idx, y_idx = np.meshgrid(range(n), range(n))
@@ -139,13 +128,14 @@ class RealisticCraterGenerator(CraterGenerator):
         rc = self._rcfg
         n = cd.size
 
-        # Base profile from spline — this IS the crater shape, preserved as-is
+        # Base profile — crater shape preserved exactly
         base = self._profiles[cd.crater_profile_id](2 * distance / n)
-        r_norm = 2 * distance / n  # 0 at center, ~1 at rim edge
+        r_norm = 2 * distance / n  # 0 at center, ~1 at rim crest
 
-        # Layer 1: Inner rim edge irregularity
-        # Only affects the narrow band where rim meets the hole (r_norm ~ 0.7-0.95)
-        # to break the unnaturally smooth/flat inner rim transition
+        # Rim crest perturbation only:
+        # Low-frequency harmonic noise on the rim crest (the highest point,
+        # where the crater transitions into the depression).
+        # This breaks the unnaturally smooth/flat rim edge.
         x_lin, y_lin = np.meshgrid(np.linspace(-1, 1, n), np.linspace(-1, 1, n))
         theta = np.arctan2(y_lin, x_lin)
 
@@ -155,34 +145,9 @@ class RealisticCraterGenerator(CraterGenerator):
                 harm_n * theta + cd.rim_phases[i]
             )
 
-        # Mask: active only at inner rim edge, zero everywhere else
-        rim_mask = (
-            self._smooth_step(r_norm, 0.65, 0.75)
-            * (1.0 - self._smooth_step(r_norm, 0.90, 0.98))
+        # Narrow mask centered on the rim crest (r_norm ~ 0.85-1.0)
+        rim_mask = self._smooth_step(r_norm, 0.80, 0.88) * (
+            1.0 - self._smooth_step(r_norm, 0.96, 1.0)
         )
-        crater = base + rim_perturbation * rim_mask
 
-        # Layer 2: Subtle wall texture
-        # Very mild 2D noise on the wall to break perfect smoothness
-        wall_lo, wall_hi = rc.slump_wall_range
-        wall_mask = (
-            self._smooth_step(r_norm, wall_lo - 0.05, wall_lo + 0.05)
-            * (1 - self._smooth_step(r_norm, wall_hi - 0.05, wall_hi + 0.05))
-        )
-        x_wall, y_wall = np.meshgrid(
-            np.linspace(0, n * 0.15, n), np.linspace(0, n * 0.15, n)
-        )
-        slump_noise = perlin_2d(x_wall, y_wall, freq=1.0, seed=cd.slump_noise_seed)
-        crater += slump_noise * rc.slump_intensity * wall_mask
-
-        # Layer 3: Floor micro-roughness
-        floor_mask = 1 - self._smooth_step(
-            r_norm, rc.floor_radius_ratio - 0.05, rc.floor_radius_ratio + 0.05
-        )
-        x_grid, y_grid = np.meshgrid(
-            np.linspace(0, n * 0.1, n), np.linspace(0, n * 0.1, n)
-        )
-        floor_noise = perlin_2d(x_grid, y_grid, freq=1.0, seed=cd.floor_noise_seed)
-        crater += floor_noise * rc.floor_noise_amp * floor_mask
-
-        return crater
+        return base + rim_perturbation * rim_mask
