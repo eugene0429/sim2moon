@@ -1,10 +1,8 @@
-"""Realistic crater generator with irregular outlines and uneven rims.
+"""Realistic crater generator with irregular outlines and uneven rim shoulders.
 
 Extends CraterGenerator with:
-- Harmonic contour perturbation + Perlin noise for irregular outlines
-- Azimuthal rim height modulation
-- Wall slump noise
-- Floor roughness via 2D Perlin noise
+- Harmonic contour perturbation for irregular outlines
+- Low-frequency azimuthal noise at the slope-break boundary (shoulder)
 """
 
 import dataclasses
@@ -129,25 +127,30 @@ class RealisticCraterGenerator(CraterGenerator):
         n = cd.size
 
         # Base profile — crater shape preserved exactly
-        base = self._profiles[cd.crater_profile_id](2 * distance / n)
-        r_norm = 2 * distance / n  # 0 at center, ~1 at rim crest
+        r_norm = 2 * distance / n  # 0 at center, ~1 at edge
+        base = self._profiles[cd.crater_profile_id](r_norm)
 
-        # Rim crest perturbation only:
-        # Low-frequency harmonic noise on the rim crest (the highest point,
-        # where the crater transitions into the depression).
-        # This breaks the unnaturally smooth/flat rim edge.
+        # Find the slope-break (shoulder): where the profile slope is steepest.
+        # This is the boundary between the bowl floor and the crater wall —
+        # the point where the curvature changes most.
+        r_1d = np.linspace(0.05, 0.95, 200)
+        profile_1d = self._profiles[cd.crater_profile_id](r_1d)
+        slope_1d = np.abs(np.gradient(profile_1d, r_1d))
+        shoulder_r = r_1d[np.argmax(slope_1d)]
+
+        # Low-frequency azimuthal perturbation at the shoulder
         x_lin, y_lin = np.meshgrid(np.linspace(-1, 1, n), np.linspace(-1, 1, n))
         theta = np.arctan2(y_lin, x_lin)
 
-        rim_perturbation = np.zeros_like(theta)
+        perturbation = np.zeros_like(theta)
         for i, harm_n in enumerate(range(2, 2 + rc.rim_n_harmonics)):
-            rim_perturbation += cd.rim_amplitudes[i] * np.cos(
+            perturbation += cd.rim_amplitudes[i] * np.cos(
                 harm_n * theta + cd.rim_phases[i]
             )
 
-        # Narrow mask centered on the rim crest (r_norm ~ 0.85-1.0)
-        rim_mask = self._smooth_step(r_norm, 0.80, 0.88) * (
-            1.0 - self._smooth_step(r_norm, 0.96, 1.0)
+        # Narrow mask centered on the shoulder (±0.08 around the peak-slope radius)
+        shoulder_mask = self._smooth_step(r_norm, shoulder_r - 0.10, shoulder_r - 0.02) * (
+            1.0 - self._smooth_step(r_norm, shoulder_r + 0.02, shoulder_r + 0.10)
         )
 
-        return base + rim_perturbation * rim_mask
+        return base + perturbation * shoulder_mask
