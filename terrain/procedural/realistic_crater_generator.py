@@ -130,13 +130,16 @@ class RealisticCraterGenerator(CraterGenerator):
         r_norm = 2 * distance / n  # 0 at center, ~1 at edge
         base = self._profiles[cd.crater_profile_id](r_norm)
 
-        # Find the slope-break (shoulder): where the profile slope is steepest.
-        # This is the boundary between the bowl floor and the crater wall —
-        # the point where the curvature changes most.
+        # Find the outer shoulder: where the steep wall flattens out toward
+        # the rim crest. Detected as where slope drops to 30% of its peak
+        # on the outer side of the wall.
         r_1d = np.linspace(0.05, 0.95, 200)
         profile_1d = self._profiles[cd.crater_profile_id](r_1d)
         slope_1d = np.abs(np.gradient(profile_1d, r_1d))
-        shoulder_r = r_1d[np.argmax(slope_1d)]
+        peak_idx = np.argmax(slope_1d)
+        threshold = slope_1d[peak_idx] * 0.3
+        outer_offset = np.argmax(slope_1d[peak_idx:] < threshold)
+        shoulder_r = r_1d[peak_idx + outer_offset]
 
         # Low-frequency azimuthal perturbation at the shoulder
         x_lin, y_lin = np.meshgrid(np.linspace(-1, 1, n), np.linspace(-1, 1, n))
