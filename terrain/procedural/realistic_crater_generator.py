@@ -142,33 +142,32 @@ class RealisticCraterGenerator(CraterGenerator):
         outer_offset = np.argmax(slope_1d[peak_idx:] < threshold)
         shoulder_r = r_1d[peak_idx + outer_offset]
 
-        # fBm-like azimuthal perturbation at the shoulder:
-        # Harmonics give broad shape, periodic Perlin adds natural irregularity.
-        # Multiple Perlin octaves with decaying amplitude for fractal detail.
+        # Shift the shoulder position per-angle instead of adding noise to a band.
+        # This makes the shoulder LINE itself irregular — no band width concept.
         x_lin, y_lin = np.meshgrid(np.linspace(-1, 1, n), np.linspace(-1, 1, n))
         theta = np.arctan2(y_lin, x_lin)
 
-        perturbation = np.zeros_like(theta)
-        # Broad shape from harmonics
+        # Azimuthal offset: harmonics (broad) + fBm Perlin (natural detail)
+        radial_offset = np.zeros_like(theta)
         for i, harm_n in enumerate(range(2, 2 + rc.rim_n_harmonics)):
-            perturbation += cd.rim_amplitudes[i] * np.cos(
+            radial_offset += cd.rim_amplitudes[i] * np.cos(
                 harm_n * theta + cd.rim_phases[i]
             )
-        # Natural detail from octaved periodic Perlin noise
-        theta_shifted = theta + np.pi  # [0, 2π]
+        theta_shifted = theta + np.pi
         amp = rc.rim_noise_amp * 0.5
         for octave in range(3):
-            freq = 2.0 * (2 ** octave)  # 2, 4, 8
-            perturbation += amp * perlin_1d(
+            freq = 2.0 * (2 ** octave)
+            radial_offset += amp * perlin_1d(
                 theta_shifted.ravel(), freq=freq,
                 period=2 * np.pi,
                 seed=cd.contour_noise_seed + octave,
             ).reshape(theta.shape)
-            amp *= 0.5  # each octave halves in amplitude
+            amp *= 0.5
 
-        # Narrow mask centered on the shoulder (±0.08 around the peak-slope radius)
-        shoulder_mask = self._smooth_step(r_norm, shoulder_r - 0.10, shoulder_r - 0.02) * (
-            1.0 - self._smooth_step(r_norm, shoulder_r + 0.02, shoulder_r + 0.10)
-        )
+        # Apply offset only near shoulder (gaussian fade, not a hard band)
+        sigma = 0.04
+        weight = np.exp(-0.5 * ((r_norm - shoulder_r) / sigma) ** 2)
 
-        return base + perturbation * shoulder_mask
+        # Evaluate profile at shifted radial position
+        r_shifted = r_norm + radial_offset * weight
+        return self._profiles[cd.crater_profile_id](np.clip(r_shifted, 0, 1))
