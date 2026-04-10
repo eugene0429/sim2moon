@@ -7,8 +7,8 @@ enforce_realtime: true
 mode: ROS2
 
 lunaryard_settings:
-  lab_length: 80.0
-  lab_width: 80.0
+  lab_length: 40.0
+  lab_width: 40.0
   resolution: 0.02
   root_path: /LunarYard
   coordinates:
@@ -16,8 +16,8 @@ lunaryard_settings:
     longitude: 29.2
 
 terrain_manager:
-  sim_length: 80.0
-  sim_width: 80.0
+  sim_length: 40.0
+  sim_width: 40.0
   resolution: 0.02
   root_path: /LunarYard
   texture_path: /LunarYard/Looks/LunarRegolith8k_antiTile
@@ -120,7 +120,7 @@ landscape_settings:
   mesh_prim_path: /LunarYard/Landscape
 
 starfield_settings:
-  enable: true
+  enable: false
 
 stellar_engine_settings:
   start_date:
@@ -259,12 +259,16 @@ static_assets_settings:
 
     - asset_name: background_landscape
       usd_path: Terrains/landscape_cropped/landscape_cropped.usd
-      crop_scale: 10
+      crop_scale: 5
       pose:
         position: [-20405.6, -9502.6, 561.8]
         orientation: [0, 0, 0, 1]
       collision: false
       material_override: /LunarYard/Looks/LunarRegolith8k_antiTile
+      transition_strip:
+        enabled: true
+        band_width: 10.0
+        n_subdivisions: 8
 
 monitoring_cameras:
   root_path: "/MonitoringCameras"
