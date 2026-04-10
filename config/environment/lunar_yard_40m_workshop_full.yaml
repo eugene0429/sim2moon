@@ -7,8 +7,8 @@ enforce_realtime: true
 mode: ROS2
 
 lunaryard_settings:
-  lab_length: 40.0
-  lab_width: 40.0
+  lab_length: 80.0
+  lab_width: 80.0
   resolution: 0.02
   root_path: /LunarYard
   coordinates:
@@ -16,8 +16,8 @@ lunaryard_settings:
     longitude: 29.2
 
 terrain_manager:
-  sim_length: 40.0
-  sim_width: 40.0
+  sim_length: 80.0
+  sim_width: 80.0
   resolution: 0.02
   root_path: /LunarYard
   texture_path: /LunarYard/Looks/LunarRegolith8k_antiTile
@@ -26,27 +26,32 @@ terrain_manager:
   mesh_orientation: [0, 0, 0, 1]
   mesh_scale: [1, 1, 1]
   moon_yard:
-    is_yard: false
-    is_lab: true
+    is_yard: true
+    is_lab: false
     crater_generator:
+      crater_mode: "realistic"
       profiles_path: assets/Terrains/crater_spline_profiles.pkl
       min_xy_ratio: 0.85
       max_xy_ratio: 1.0
       resolution: 0.02
       pad_size: 500
       random_rotation: true
-      z_scale: 0.2
+      z_scale: 0.4
       seed: 42
+    realistic_crater:
+      n_harmonics: 4
+      harmonic_amp: 0.08
+      contour_noise_amp: 0.02
+      rim_n_harmonics: 3
+      rim_noise_amp: 0.08
+      slump_intensity: 0.02
+      floor_noise_amp: 0.01
     crater_distribution:
-      x_size: 40.0
-      y_size: 40.0
-      densities: [0.01, 0.02, 0.03]
-      radius: [[1.5, 2.5], [0.75, 1.5], [0.25, 0.5]]
+      densities: [0.005, 0.01, 0.02]
+      radius: [[3.5, 4.5], [1.75, 2.5], [0.5, 1.0]]
       num_repeat: 0
       seed: 42
     base_terrain_generator:
-      x_size: 40.0
-      y_size: 40.0
       resolution: 0.02
       max_elevation: 0.5
       min_elevation: -0.5
@@ -55,9 +60,6 @@ terrain_manager:
     deformation_engine:
       enable: false
       delay: 2.0
-      terrain_width: 40.0
-      terrain_height: 40.0
-      terrain_resolution: 0.02
       footprint:
         width: 0.25
         height: 0.2
@@ -77,23 +79,57 @@ terrain_manager:
         mean_slope: -0.00046
         mean_intercept: -0.0013
 
+# Bekker-Janosi terramechanics for wheel-terrain interaction.
+# When disabled, only PhysX rigid-body friction is used.
+terramechanics_settings:
+  enable: false
+  contact_force_ema: 0.7  # EMA smoothing for PhysX contact forces (0=raw, 0.7=smooth)
+  robot:
+    mass: 20.0            # rover total mass (kg)
+    num_wheels: 6
+    wheel_radius: 0.09    # Pragyaan wheel radius (m)
+    wheel_width: 0.1      # wheel contact patch width (m)
+    wheel_lug_height: 0.02  # grouser height protruding from wheel surface (m)
+    wheel_lug_count: 12     # number of grousers around wheel circumference
+  soil:
+    # Bekker pressure-sinkage parameters (lunar regolith defaults)
+    k_c: 1400.0           # cohesive modulus (N/m^(n+1))
+    k_phi: 820000.0       # frictional modulus (N/m^(n+2))
+    n: 1.0                # sinkage exponent
+    # Mohr-Coulomb shear strength
+    c: 170.0              # cohesion (Pa) — lower = more slippery
+    phi_deg: 35.0         # friction angle (degrees) — lower = more slippery
+    K: 0.018              # shear deformation modulus (m) — higher = more slippery
+    # Other
+    rho: 1500.0           # bulk density (kg/m^3)
+    gravity: 1.625        # surface gravity (m/s^2)
+    slip_sinkage_coeff: 0.5  # slip-sinkage coupling (0=off, 0.5=moderate)
+    # Soil heterogeneity (non-uniform terrain)
+    heterogeneity: 0.0    # variation intensity (0=uniform, 0.5~0.8=realistic)
+    heterogeneity_scale: 2.0  # patch size in meters
+    heterogeneity_seed: 42
+
 landscape_settings:
-  enable: true
+  enable: false
   dem_path: Terrains/SouthPole/Site01_final_adj_5mpp_surf
-  crop_size: 500.0
+  crop_size: 1000.0
   target_resolution: 10.0
-  hole_margin: 2.0
+  hole_margin: 1.0
+  max_slope: 3.0
   texture_path: /LunarYard/Looks/LunarRegolith8k_antiTile
   mesh_prim_path: /LunarYard/Landscape
+
+starfield_settings:
+  enable: true
 
 stellar_engine_settings:
   start_date:
     year: 2025
-    month: 2
+    month: 3
     day: 7
     hour: 1
     minute: 1
-  time_scale: 60000
+  time_scale: 1
   update_interval: 600
   ephemeris_path: assets/Ephemeris
 
@@ -126,7 +162,7 @@ rocks_settings:
         resolution: 0.02
         min_gap: 0.05
         min_crater_radius: 1.5
-        rocks_per_crater: 15
+        rocks_per_crater: 5
         rim_inner_ratio: 0.8
         rim_outer_ratio: 2.5
         decay_power: 2.0
@@ -142,7 +178,7 @@ rocks_settings:
         resolution: 0.02
         min_gap: 0.03
         min_crater_radius: 1.5
-        rocks_per_crater: 20
+        rocks_per_crater: 10
         inner_radius_ratio: 0.1
         outer_radius_ratio: 0.9
         wall_bias: 2.0
@@ -157,8 +193,8 @@ rocks_settings:
         method: clustered_scatter
         resolution: 0.02
         min_gap: 0.03
-        lambda_parent: 0.2
-        lambda_daughter: 4
+        lambda_parent: 0.1
+        lambda_daughter: 2
         sigma: 10.0
         d_min: 0.5
         d_max: 2.0
@@ -171,7 +207,7 @@ rocks_settings:
         method: background_scatter
         resolution: 0.02
         min_gap: 0.01
-        density: 0.5
+        density: 0.2
         d_min: 0.2
         d_max: 1.0
         alpha: 3.0
@@ -182,7 +218,7 @@ robots_settings:
   robots_root: "/Robots"
   parameters:
     - robot_name: pragyaan
-      usd_path: assets/USD_Assets/robots/pragyaan/nograph_pragyaan.usd
+      usd_path: assets/USD_Assets/robots/pragyaan/pragyaan.usd
       pose:
         position: [26.0, 16.6, 0.8]
         orientation: [0.0, 0.0, 0.70711, 0.70711]
@@ -214,13 +250,6 @@ robots_settings:
 static_assets_settings:
   root_path: "/StaticAssets"
   parameters:
-    - asset_name: rock1
-      usd_path: USD_Assets/rocks/lunalab_rocks/rock_1/rock1.usd
-      pose:
-        position: [28, 19.0, 0.0]
-        orientation: [1, 0, 0, 1]
-      collision: true
-
     - asset_name: lander
       usd_path: USD_Assets/common/lander/Vikram/Vikram.usd
       pose:
@@ -228,13 +257,14 @@ static_assets_settings:
         orientation: [0.5, 0.5, 0.5, 0.5]
       collision: true
 
-    # - asset_name: background_landscape
-    #   usd_path: Terrains/landscape_cropped/landscape_cropped.usd
-    #   pose:
-    #     position: [-20405.6, -9502.6, 561.8]
-    #     orientation: [0, 0, 0, 1]
-    #   collision: false
-    #   material_override: /LunarYard/Looks/LunarRegolith8k_antiTile
+    - asset_name: background_landscape
+      usd_path: Terrains/landscape_cropped/landscape_cropped.usd
+      crop_scale: 10
+      pose:
+        position: [-20405.6, -9502.6, 561.8]
+        orientation: [0, 0, 0, 1]
+      collision: false
+      material_override: /LunarYard/Looks/LunarRegolith8k_antiTile
 
 monitoring_cameras:
   root_path: "/MonitoringCameras"
@@ -255,3 +285,8 @@ monitoring_cameras:
       ros2:
         topic: "/monitoring/monitoring_camera"
         frame_id: "monitoring_camera_id"
+
+udp_bridge:
+  enable: true
+  target_ip: "127.0.0.1" #"172.18.0.8"
+  target_port: 7777
