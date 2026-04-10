@@ -433,7 +433,92 @@ class LunarYardEnvironment(BaseEnvironment):
             if material_override:
                 self._apply_material_override(prim, material_override)
 
+            # Transition strip (for elevated main terrain → background landscape)
+            transition_cfg = asset.get("transition_strip")
+            if transition_cfg and transition_cfg.get("enabled", False):
+                self._build_background_transition(
+                    root_path,
+                    prim_path,
+                    transition_cfg,
+                    material_override or "",
+                )
+
             logger.info("Static asset '%s' loaded from %s", name, usd_path)
+
+    def _build_background_transition(
+        self,
+        root_path: str,
+        bg_prim_path: str,
+        transition_cfg: dict,
+        material_path: str,
+    ) -> None:
+        """Build and render a Hermite transition strip between main terrain and background.
+
+        Args:
+            root_path: USD root path for static assets (e.g. "/StaticAssets").
+            bg_prim_path: USD path of the loaded background landscape prim.
+            transition_cfg: Dict with optional keys: band_width (float, default 10.0),
+                n_subdivisions (int, default 8).
+            material_path: USD material path to apply to the transition mesh.
+        """
+        import core.pxr_utils as pxr_utils
+        from terrain.static_transition import sample_background_z, render_static_transition
+
+        if self._terrain_manager is None:
+            logger.warning("No terrain manager available; skipping background transition strip")
+            return
+
+        main_dem = self._terrain_manager.get_dem()
+        if main_dem is None:
+            logger.warning("Terrain DEM not available; skipping background transition strip")
+            return
+
+        tm_cfg = self._cfg.get("terrain_manager", {})
+        main_res = (
+            tm_cfg.get("resolution", 0.02)
+            if isinstance(tm_cfg, dict)
+            else getattr(tm_cfg, "resolution", 0.02)
+        )
+        mesh_position = (
+            tm_cfg.get("mesh_position", [0.0, 0.0, 0.0])
+            if isinstance(tm_cfg, dict)
+            else list(getattr(tm_cfg, "mesh_position", [0.0, 0.0, 0.0]))
+        )
+        sim_length = (
+            tm_cfg.get("sim_length", 40.0)
+            if isinstance(tm_cfg, dict)
+            else getattr(tm_cfg, "sim_length", 40.0)
+        )
+        sim_width = (
+            tm_cfg.get("sim_width", 40.0)
+            if isinstance(tm_cfg, dict)
+            else getattr(tm_cfg, "sim_width", 40.0)
+        )
+
+        main_pos = (float(mesh_position[0]), float(mesh_position[1]), float(mesh_position[2]))
+        main_size = (float(sim_width), float(sim_length))
+
+        x_min, x_max = main_pos[0], main_pos[0] + main_size[0]
+        y_min, y_max = main_pos[1], main_pos[1] + main_size[1]
+
+        outer_z = sample_background_z(
+            self._stage, bg_prim_path, x_min, x_max, y_min, y_max
+        )
+
+        render_static_transition(
+            self._stage,
+            pxr_utils,
+            root_path,
+            main_dem,
+            float(main_res),
+            main_pos,
+            main_size,
+            outer_z,
+            band_width=float(transition_cfg.get("band_width", 10.0)),
+            n_subdivisions=int(transition_cfg.get("n_subdivisions", 8)),
+            material_path=material_path,
+        )
+        logger.info("Background transition strip rendered (outer_z=%.3f m)", outer_z)
 
     def _apply_material_override(self, prim, material_path: str) -> None:
         """Override all Mesh descendants of a prim with the given material.
