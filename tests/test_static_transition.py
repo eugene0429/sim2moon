@@ -64,7 +64,7 @@ def test_inner_ring_matches_dem_plus_offset():
     )
     inner_mask = np.arange(len(verts)) % n_cols == 0
     # flat DEM 0.3 + z_offset 2.0 = 2.3
-    assert np.allclose(verts[inner_mask, 2], 0.3 + z_offset, atol=0.05)
+    assert np.allclose(verts[inner_mask, 2], 0.3 + z_offset, atol=1e-4)
 
 
 def test_no_indices_out_of_bounds():
@@ -83,3 +83,31 @@ def test_no_indices_out_of_bounds():
     )
     assert int(indices.min()) >= 0
     assert int(indices.max()) < len(verts)
+
+
+def test_inner_ring_varies_with_non_flat_dem():
+    """Inner ring heights must vary when DEM is not flat."""
+    from terrain.static_transition import build_static_transition_arrays
+
+    # DEM linearly increasing in Y: row i has height i * 0.01
+    rows, cols = 100, 100
+    dem = np.zeros((rows, cols), dtype=np.float32)
+    for i in range(rows):
+        dem[i, :] = i * 0.01
+
+    n_subdivisions = 4
+    n_cols = n_subdivisions + 1
+
+    verts, indices, uvs = build_static_transition_arrays(
+        main_dem=dem,
+        main_dem_resolution=0.1,
+        main_pos=(0.0, 0.0, 0.0),
+        main_size=(8.0, 8.0),
+        outer_z=0.0,
+        band_width=2.0,
+        n_subdivisions=n_subdivisions,
+    )
+    inner_mask = np.arange(len(verts)) % n_cols == 0
+    inner_z = verts[inner_mask, 2]
+    # Heights must not all be equal (DEM varies with Y)
+    assert inner_z.max() - inner_z.min() > 0.05

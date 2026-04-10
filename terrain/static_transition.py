@@ -132,7 +132,7 @@ def build_static_transition_arrays(
     strip_len = np.sqrt(dx ** 2 + dy ** 2)
 
     # Inner slope: radial finite difference from main DEM
-    _eps = main_dem_resolution * 2.0
+    _eps = main_dem_resolution * 0.5
     m0 = np.zeros(n_ring, dtype=np.float64)
     nonzero = strip_len > 0
     if np.any(nonzero):
@@ -144,10 +144,7 @@ def build_static_transition_arrays(
             _mh(x, y + _eps) - _mh(x, y - _eps)
             for x, y in zip(ix[nonzero], iy[nonzero])
         ]) / (2 * _eps)
-        m0[nonzero] = (
-            (dz_dx_m * dx[nonzero] + dz_dy_m * dy[nonzero])
-            / strip_len[nonzero]
-        ) * strip_len[nonzero]
+        m0[nonzero] = dz_dx_m * dx[nonzero] + dz_dy_m * dy[nonzero]
 
     m1 = np.zeros(n_ring, dtype=np.float64)  # flat outer boundary -> zero slope
 
