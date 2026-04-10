@@ -197,3 +197,145 @@ def build_static_transition_arrays(
         all_verts.shape[0], indices.shape[0] // 3, band_width, n_subdivisions,
     )
     return all_verts, indices, uv_arr
+
+
+def sample_background_z(
+    stage,
+    prim_path: str,
+    x_min: float,
+    x_max: float,
+    y_min: float,
+    y_max: float,
+) -> float:
+    """Sample median Z of a background USD mesh within a world-space XY bounding box.
+
+    Iterates all UsdGeom.Mesh descendants of ``prim_path``, transforms their
+    vertices to world space, and returns the median Z of those inside the box.
+
+    Args:
+        stage: USD stage.
+        prim_path: USD path to the background landscape root prim.
+        x_min, x_max: World-space X bounds.
+        y_min, y_max: World-space Y bounds.
+
+    Returns:
+        Median world-space Z of vertices inside the bounding box, or 0.0 if
+        no vertices are found or pxr is unavailable.
+    """
+    try:
+        from pxr import UsdGeom, Usd
+    except ImportError:
+        logger.warning("pxr not available; using outer_z=0.0")
+        return 0.0
+
+    root_prim = stage.GetPrimAtPath(prim_path)
+    if not root_prim.IsValid():
+        logger.warning("Background prim not found: %s; using outer_z=0.0", prim_path)
+        return 0.0
+
+    z_values = []
+    for prim in Usd.PrimRange(root_prim):
+        if not prim.IsA(UsdGeom.Mesh):
+            continue
+        points = UsdGeom.Mesh(prim).GetPointsAttr().Get()
+        if points is None or len(points) == 0:
+            continue
+
+        xform = UsdGeom.Xformable(prim).ComputeLocalToWorldTransform(
+            Usd.TimeCode.Default()
+        )
+        pts = np.array([[p[0], p[1], p[2]] for p in points], dtype=np.float64)
+        ones = np.ones((len(pts), 1), dtype=np.float64)
+        # USD GfMatrix4d is row-major: world = local @ M
+        m = np.array(xform).reshape(4, 4)
+        world = np.hstack([pts, ones]) @ m  # (N, 4)
+        wx, wy, wz = world[:, 0], world[:, 1], world[:, 2]
+
+        mask = (wx >= x_min) & (wx <= x_max) & (wy >= y_min) & (wy <= y_max)
+        z_values.extend(wz[mask].tolist())
+
+    if not z_values:
+        logger.warning(
+            "No background vertices in [%.1f, %.1f] x [%.1f, %.1f]; using outer_z=0.0",
+            x_min, x_max, y_min, y_max,
+        )
+        return 0.0
+
+    result = float(np.median(z_values))
+    logger.info(
+        "Background Z sampled from %d vertices in bounds: median=%.3f m",
+        len(z_values), result,
+    )
+    return result
+
+
+def render_static_transition(
+    stage,
+    pxr_utils,
+    root_path: str,
+    main_dem: np.ndarray,
+    main_dem_resolution: float,
+    main_pos: Tuple[float, float, float],
+    main_size: Tuple[float, float],
+    outer_z: float,
+    band_width: float = 10.0,
+    n_subdivisions: int = 8,
+    material_path: str = "",
+) -> None:
+    """Build and render the static transition strip as a USD Mesh prim.
+
+    Creates the mesh at ``{root_path}/background_landscape_transition/mesh``.
+
+    Args:
+        stage: USD stage.
+        pxr_utils: core.pxr_utils module (provides createXform, enableSmoothShade,
+            applyMaterialFromPath).
+        root_path: USD parent path for static assets (e.g. "/StaticAssets").
+        main_dem: Main terrain heightmap (2-D float32, Y-flipped).
+        main_dem_resolution: Meters per pixel of the main terrain DEM.
+        main_pos: (x0, y0, z_offset) world origin of the main terrain.
+        main_size: (width, length) of the main terrain in meters.
+        outer_z: Background landscape Z at the outer boundary.
+        band_width: Width of the transition strip in meters.
+        n_subdivisions: Number of intermediate rows.
+        material_path: USD stage path of the material to apply.
+    """
+    try:
+        from pxr import UsdGeom, Sdf
+    except ImportError:
+        logger.warning("pxr not available; skipping transition render")
+        return
+
+    vertices, indices, uvs = build_static_transition_arrays(
+        main_dem, main_dem_resolution, main_pos, main_size,
+        outer_z, band_width, n_subdivisions,
+    )
+    if vertices.shape[0] == 0:
+        logger.warning("No transition vertices; skipping render")
+        return
+
+    prim_path = f"{root_path}/background_landscape_transition"
+    pxr_utils.createXform(stage, prim_path, add_default_op=True)
+
+    mesh_path = f"{prim_path}/mesh"
+    mesh = UsdGeom.Mesh.Define(stage, mesh_path)
+    mesh.GetPointsAttr().Set(vertices)
+    tri_indices = np.array(indices).reshape(-1, 3)
+    mesh.GetFaceVertexIndicesAttr().Set(tri_indices)
+    mesh.GetFaceVertexCountsAttr().Set([3] * len(tri_indices))
+
+    if uvs.shape[0] > 0:
+        pv = UsdGeom.PrimvarsAPI(mesh.GetPrim()).CreatePrimvar(
+            "st", Sdf.ValueTypeNames.Float2Array
+        )
+        pv.Set(uvs)
+        pv.SetInterpolation("faceVarying")
+
+    pxr_utils.enableSmoothShade(mesh.GetPrim())
+    if material_path:
+        pxr_utils.applyMaterialFromPath(stage, mesh_path, material_path)
+
+    logger.info(
+        "Static transition rendered at %s (%d verts, %d tris)",
+        mesh_path, vertices.shape[0], indices.shape[0] // 3,
+    )
