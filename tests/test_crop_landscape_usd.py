@@ -1,5 +1,6 @@
 import sys
 import os
+import subprocess
 import tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -175,3 +176,26 @@ class TestUsdIO:
             )
             assert os.path.isfile(os.path.join(tmpdir, "landscape_cropped_2x.usd"))
             assert os.path.isfile(os.path.join(tmpdir, "landscape_cropped_3x.usd"))
+
+
+class TestCLI:
+    def test_cli_help(self):
+        result = subprocess.run(
+            [sys.executable, "tools/crop_landscape_usd.py", "--help"],
+            capture_output=True, text=True,
+            cwd=os.path.join(os.path.dirname(__file__), ".."),
+        )
+        assert result.returncode == 0
+        assert "--source" in result.stdout
+        assert "--terrain-size" in result.stdout
+
+    def test_cli_missing_source_exits_nonzero(self):
+        result = subprocess.run(
+            [sys.executable, "tools/crop_landscape_usd.py",
+             "--source", "/nonexistent/file.usd",
+             "--terrain-size", "40",
+             "--pose-offset", "0", "0", "0"],
+            capture_output=True, text=True,
+            cwd=os.path.join(os.path.dirname(__file__), ".."),
+        )
+        assert result.returncode != 0

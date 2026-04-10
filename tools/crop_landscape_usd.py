@@ -218,3 +218,53 @@ def generate_cropped_variants(
             total_tris_before, total_tris_after,
             100.0 * total_tris_after / total_tris_before if total_tris_before else 0,
         )
+
+
+def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+
+    parser = argparse.ArgumentParser(
+        description="Generate pre-cropped USD landscape variants for the lunar simulator."
+    )
+    parser.add_argument("--source", required=True, help="Source USD file path")
+    parser.add_argument("--terrain-size", type=float, required=True,
+                        help="Main terrain side length in meters (square assumed)")
+    parser.add_argument("--pose-offset", type=float, nargs=3, required=True,
+                        metavar=("TX", "TY", "TZ"),
+                        help="XY(Z) pose translation from YAML pose.position")
+    parser.add_argument("--terrain-center", type=float, nargs=2,
+                        metavar=("CX", "CY"),
+                        help="World-space terrain centre (default: terrain_size/2 each)")
+    parser.add_argument("--scales", type=int, nargs="+", default=[5, 10, 20],
+                        help="Crop scale multipliers to generate (default: 5 10 20)")
+    parser.add_argument("--output-dir", default=None,
+                        help="Output directory (default: same directory as --source)")
+    args = parser.parse_args()
+
+    source = args.source
+    if not os.path.isfile(source):
+        print(f"ERROR: source USD not found: {source}", file=sys.stderr)
+        sys.exit(1)
+
+    terrain_size = args.terrain_size
+    pose_offset = (args.pose_offset[0], args.pose_offset[1])
+    if args.terrain_center:
+        terrain_center = tuple(args.terrain_center)
+    else:
+        terrain_center = (terrain_size / 2.0, terrain_size / 2.0)
+
+    output_dir = args.output_dir or os.path.dirname(os.path.abspath(source))
+    os.makedirs(output_dir, exist_ok=True)
+
+    generate_cropped_variants(
+        source_usd=source,
+        terrain_size=terrain_size,
+        pose_offset=pose_offset,
+        terrain_center=terrain_center,
+        scales=args.scales,
+        output_dir=output_dir,
+    )
+
+
+if __name__ == "__main__":
+    main()
