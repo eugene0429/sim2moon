@@ -362,6 +362,47 @@ class LunarYardEnvironment(BaseEnvironment):
             )
         return usd_path
 
+    def _compute_crop_adjusted_pos(
+        self,
+        original_usd_path: str,
+        crop_scale: int,
+        assets_root: str,
+        original_pos: list,
+    ):
+        """Return an adjusted [x, y, z] position for a cropped landscape USD.
+
+        Reads the sidecar ``_meta.json`` that was written by ``crop_landscape_usd.py``
+        and shifts the XY origin so that the crop centre aligns with the main terrain
+        centre in world space.  Returns ``None`` if the metadata file is not found.
+
+        Args:
+            original_usd_path: The relative USD path from the asset config (un-cropped).
+            crop_scale: Integer scale multiplier (e.g. 10).
+            assets_root: Absolute root used to resolve asset paths.
+            original_pos: The ``[x, y, z]`` position from the YAML config.
+        """
+        import json
+        import os
+        stem, _ = os.path.splitext(original_usd_path)
+        meta_path = os.path.join(assets_root, f"{stem}_{crop_scale}x_meta.json")
+        if not os.path.isfile(meta_path):
+            logger.warning(
+                "Crop metadata not found for scale %dx: %s — "
+                "using original pose (landscape may appear at wrong location)",
+                crop_scale, meta_path,
+            )
+            return None
+        with open(meta_path) as f:
+            meta = json.load(f)
+        tm_cfg = self._cfg.get("terrain_manager", {})
+        mesh_pos = tm_cfg.get("mesh_position", [0, 0, 0])
+        terrain_cx = mesh_pos[0] + tm_cfg.get("sim_length", 0) / 2.0
+        terrain_cy = mesh_pos[1] + tm_cfg.get("sim_width", 0) / 2.0
+        pos = list(original_pos)
+        pos[0] = terrain_cx - meta["local_cx"]
+        pos[1] = terrain_cy - meta["local_cy"]
+        return pos
+
     def _load_static_assets(self, cfg) -> None:
         """Load static USD assets (lander, background landscape, etc.)."""
         import os
@@ -390,10 +431,23 @@ class LunarYardEnvironment(BaseEnvironment):
             prim = self._stage.DefinePrim(prim_path, "Xform")
             prim.GetReferences().AddReference(usd_path)
 
-            # Set pose
+            # Set pose — for cropped landscape variants the XY position is recomputed
+            # so that the crop center aligns with the main terrain center.
             pose = asset.get("pose", {})
-            pos = pose.get("position", [0, 0, 0])
+            pos = list(pose.get("position", [0, 0, 0]))
             orient = pose.get("orientation", [0, 0, 0, 1])
+
+            crop_scale = asset.get("crop_scale")
+            if crop_scale is not None and raw_usd_path != asset["usd_path"]:
+                adjusted = self._compute_crop_adjusted_pos(
+                    asset["usd_path"], int(crop_scale), assets_root, pos
+                )
+                if adjusted is not None:
+                    pos = adjusted
+                    logger.info(
+                        "Crop pose adjusted for %s (scale %dx): pos=(%.2f, %.2f, %.2f)",
+                        name, int(crop_scale), pos[0], pos[1], pos[2],
+                    )
 
             xformable = UsdGeom.Xformable(prim)
             # Find or create translate/orient ops, respecting existing precision

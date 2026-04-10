@@ -17,6 +17,7 @@ Usage:
 """
 
 import argparse
+import json
 import logging
 import os
 import sys
@@ -237,6 +238,12 @@ def generate_cropped_variants(
         out_name = f"{stem}_{scale}x{suffix}"
         out_path = os.path.join(output_dir, out_name)
         write_cropped_usd(cropped, out_path)
+
+        # Write sidecar metadata: loader uses local_cx/cy to compute adjusted pose
+        meta_path = os.path.join(output_dir, f"{stem}_{scale}x_meta.json")
+        with open(meta_path, "w") as f:
+            json.dump({"local_cx": local_cx, "local_cy": local_cy}, f)
+
         logger.info(
             "Scale %dx → %s  (%d → %d tris, %.1f%% kept)",
             scale, out_path,
