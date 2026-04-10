@@ -82,7 +82,7 @@ def crop_mesh(
     used_indices = np.unique(kept_tris)
 
     # Build remapping from old index to new compacted index
-    remap = np.empty(points.shape[0], dtype=np.int32)
+    remap = np.full(points.shape[0], -1, dtype=np.int32)
     remap[used_indices] = np.arange(len(used_indices), dtype=np.int32)
 
     out_points = points[used_indices].astype(np.float32)

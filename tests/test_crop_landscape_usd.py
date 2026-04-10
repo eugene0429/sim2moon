@@ -73,8 +73,13 @@ class TestCropMesh:
 
     def test_offset_crop_center(self):
         pts, idx = self._make_grid(n=6, spacing=10.0)
-        out_pts_centre, _ = crop_mesh(pts, idx, local_cx=0.0, local_cy=0.0, half=20.0)
-        out_pts_corner, _ = crop_mesh(pts, idx, local_cx=30.0, local_cy=30.0, half=20.0)
-        # Different crop centres should generally yield different vertex counts
-        # (not a strict requirement, but validates the offset is working)
-        assert True  # offset crop runs without error
+        out_pts_centre, out_idx_centre = crop_mesh(pts, idx, local_cx=0.0, local_cy=0.0, half=20.0)
+        out_pts_corner, out_idx_corner = crop_mesh(pts, idx, local_cx=30.0, local_cy=30.0, half=20.0)
+        # Validate index integrity for both results
+        if out_idx_centre.shape[0] > 0:
+            assert out_idx_centre.max() < out_pts_centre.shape[0]
+        if out_idx_corner.shape[0] > 0:
+            assert out_idx_corner.max() < out_pts_corner.shape[0]
+        # A 6×6 grid at spacing=10 with half=20 should yield different counts
+        # for centre (0,0) vs corner (30,30) crops
+        assert out_pts_centre.shape[0] != out_pts_corner.shape[0]
