@@ -395,9 +395,15 @@ class LunarYardEnvironment(BaseEnvironment):
         with open(meta_path) as f:
             meta = json.load(f)
         tm_cfg = self._cfg.get("terrain_manager", {})
-        mesh_pos = tm_cfg.get("mesh_position", [0, 0, 0])
-        terrain_cx = mesh_pos[0] + tm_cfg.get("sim_length", 0) / 2.0
-        terrain_cy = mesh_pos[1] + tm_cfg.get("sim_width", 0) / 2.0
+        # terrain_manager config may be a dataclass/OmegaConf object or a plain dict
+        if hasattr(tm_cfg, "mesh_position"):
+            mesh_pos = list(tm_cfg.mesh_position)
+            terrain_cx = mesh_pos[0] + tm_cfg.sim_length / 2.0
+            terrain_cy = mesh_pos[1] + tm_cfg.sim_width / 2.0
+        else:
+            mesh_pos = tm_cfg.get("mesh_position", [0, 0, 0])
+            terrain_cx = mesh_pos[0] + tm_cfg.get("sim_length", 0) / 2.0
+            terrain_cy = mesh_pos[1] + tm_cfg.get("sim_width", 0) / 2.0
         pos = list(original_pos)
         pos[0] = terrain_cx - meta["local_cx"]
         pos[1] = terrain_cy - meta["local_cy"]
