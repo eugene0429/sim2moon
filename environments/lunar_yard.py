@@ -331,7 +331,7 @@ class LunarYardEnvironment(BaseEnvironment):
         if static_cfg is not None and self._stage is not None:
             self._load_static_assets(static_cfg)
 
-    def _resolve_static_asset_usd_path(self, asset: dict) -> str:
+    def _resolve_static_asset_usd_path(self, asset: dict, assets_root: str = "") -> str:
         """Return the USD path for an asset, applying crop_scale suffix if available.
 
         If ``crop_scale`` is set and the suffixed file exists, returns the
@@ -350,14 +350,15 @@ class LunarYardEnvironment(BaseEnvironment):
         if crop_scale is not None:
             stem, suffix = os.path.splitext(usd_path)
             candidate = f"{stem}_{int(crop_scale)}x{suffix}"
-            if os.path.isfile(candidate):
+            abs_candidate = os.path.join(assets_root, candidate)
+            if os.path.isfile(abs_candidate):
                 logger.info(
-                    "Using cropped landscape (scale %dx): %s", int(crop_scale), candidate
+                    "Using cropped landscape (scale %dx): %s", int(crop_scale), abs_candidate
                 )
                 return candidate
             logger.warning(
                 "Cropped USD not found for scale %dx: %s — falling back to original",
-                int(crop_scale), candidate,
+                int(crop_scale), abs_candidate,
             )
         return usd_path
 
@@ -382,7 +383,7 @@ class LunarYardEnvironment(BaseEnvironment):
         for asset in parameters:
             name = asset["asset_name"]
             prim_path = f"{root_path}/{name}"
-            raw_usd_path = self._resolve_static_asset_usd_path(asset)
+            raw_usd_path = self._resolve_static_asset_usd_path(asset, assets_root)
             usd_path = os.path.join(assets_root, raw_usd_path)
 
             # Create prim and add USD reference
