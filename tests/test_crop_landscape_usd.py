@@ -1,9 +1,11 @@
 import sys
 import os
+import tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import numpy as np
 import pytest
+from pxr import Usd, UsdGeom, Vt, Gf
 from tools.crop_landscape_usd import compute_local_center, crop_mesh
 
 
@@ -83,3 +85,93 @@ class TestCropMesh:
         # A 6×6 grid at spacing=10 with half=20 should yield different counts
         # for centre (0,0) vs corner (30,30) crops
         assert out_pts_centre.shape[0] != out_pts_corner.shape[0]
+
+
+class TestUsdIO:
+    def _make_temp_usd(self, points, indices, path):
+        """Write a minimal USD mesh file for testing."""
+        stage = Usd.Stage.CreateNew(path)
+        mesh = UsdGeom.Mesh.Define(stage, "/Landscape/mesh")
+        mesh.GetPointsAttr().Set(Vt.Vec3fArray([Gf.Vec3f(float(p[0]), float(p[1]), float(p[2])) for p in points]))
+        mesh.GetFaceVertexIndicesAttr().Set(Vt.IntArray(indices.tolist()))
+        mesh.GetFaceVertexCountsAttr().Set(Vt.IntArray([3] * (len(indices) // 3)))
+        stage.GetRootLayer().Save()
+        return path
+
+    def test_load_usd_meshes_returns_points_and_indices(self):
+        from tools.crop_landscape_usd import load_usd_meshes
+        pts = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], dtype=np.float32)
+        idx = np.array([0, 1, 2], dtype=np.int32)
+        with tempfile.NamedTemporaryFile(suffix=".usd", delete=False) as f:
+            usd_path = f.name
+        try:
+            self._make_temp_usd(pts, idx, usd_path)
+            meshes = load_usd_meshes(usd_path)
+            assert len(meshes) == 1
+            out_pts, out_idx = meshes[0]
+            assert out_pts.shape == (3, 3)
+            assert out_idx.shape == (3,)
+        finally:
+            os.unlink(usd_path)
+
+    def test_load_usd_meshes_raises_on_missing_file(self):
+        from tools.crop_landscape_usd import load_usd_meshes
+        with pytest.raises(FileNotFoundError):
+            load_usd_meshes("/nonexistent/path/to/file.usd")
+
+    def test_write_cropped_usd_creates_file(self):
+        from tools.crop_landscape_usd import write_cropped_usd
+        pts = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], dtype=np.float32)
+        idx = np.array([0, 1, 2], dtype=np.int32)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_path = os.path.join(tmpdir, "out.usd")
+            write_cropped_usd([(pts, idx)], out_path)
+            assert os.path.isfile(out_path)
+
+    def test_write_cropped_usd_roundtrip(self):
+        from tools.crop_landscape_usd import write_cropped_usd, load_usd_meshes
+        pts = np.array([[0, 0, 0], [2, 0, 0], [0, 2, 0], [2, 2, 0]], dtype=np.float32)
+        idx = np.array([0, 1, 2, 1, 3, 2], dtype=np.int32)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_path = os.path.join(tmpdir, "roundtrip.usd")
+            write_cropped_usd([(pts, idx)], out_path)
+            meshes = load_usd_meshes(out_path)
+            assert len(meshes) == 1
+            out_pts, out_idx = meshes[0]
+            assert out_pts.shape[0] == 4
+            assert out_idx.shape[0] == 6
+
+    def test_generate_cropped_variants_creates_files(self):
+        from tools.crop_landscape_usd import generate_cropped_variants
+        n = 10
+        spacing = 10.0
+        rows = np.arange(n + 1) * spacing - n * spacing / 2
+        cols = np.arange(n + 1) * spacing - n * spacing / 2
+        pts = np.array([[c, r, 0.0] for r in rows for c in cols], dtype=np.float32)
+        indices = []
+        stride = n + 1
+        for r in range(n):
+            for c in range(n):
+                i00 = r * stride + c
+                indices += [i00, i00 + stride, i00 + 1, i00 + 1, i00 + stride, i00 + stride + 1]
+        indices = np.array(indices, dtype=np.int32)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            src = os.path.join(tmpdir, "landscape_cropped.usd")
+            stage = Usd.Stage.CreateNew(src)
+            mesh = UsdGeom.Mesh.Define(stage, "/L/m")
+            mesh.GetPointsAttr().Set(Vt.Vec3fArray([Gf.Vec3f(float(p[0]), float(p[1]), float(p[2])) for p in pts]))
+            mesh.GetFaceVertexIndicesAttr().Set(Vt.IntArray(indices.tolist()))
+            mesh.GetFaceVertexCountsAttr().Set(Vt.IntArray([3] * (len(indices) // 3)))
+            stage.GetRootLayer().Save()
+
+            generate_cropped_variants(
+                source_usd=src,
+                terrain_size=40.0,
+                pose_offset=(0.0, 0.0),
+                terrain_center=(0.0, 0.0),
+                scales=[2, 3],
+                output_dir=tmpdir,
+            )
+            assert os.path.isfile(os.path.join(tmpdir, "landscape_cropped_2x.usd"))
+            assert os.path.isfile(os.path.join(tmpdir, "landscape_cropped_3x.usd"))

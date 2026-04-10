@@ -14,7 +14,15 @@ Usage:
         --output-dir assets/Terrains/landscape_cropped/
 """
 
+import argparse
+import logging
+import os
+import sys
+from typing import List, Tuple
+
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 def compute_local_center(
@@ -89,3 +97,124 @@ def crop_mesh(
     out_indices = remap[kept_tris].flatten().astype(np.int32)
 
     return out_points, out_indices
+
+
+def load_usd_meshes(usd_path: str) -> List[Tuple[np.ndarray, np.ndarray]]:
+    """Load all UsdGeom.Mesh prims from a USD file.
+
+    Args:
+        usd_path: Absolute or relative path to the USD file.
+
+    Returns:
+        List of (points [N,3] float32, face_vertex_indices [M,] int32) tuples,
+        one per mesh prim found in the stage.
+
+    Raises:
+        FileNotFoundError: If the USD file does not exist.
+        RuntimeError: If no mesh prims are found.
+    """
+    if not os.path.isfile(usd_path):
+        raise FileNotFoundError(f"USD file not found: {usd_path}")
+
+    try:
+        from pxr import Usd, UsdGeom
+    except ImportError as e:
+        raise RuntimeError("pxr (OpenUSD) is required to run this script") from e
+
+    stage = Usd.Stage.Open(usd_path)
+    meshes = []
+    for prim in stage.Traverse():
+        if not prim.IsA(UsdGeom.Mesh):
+            continue
+        mesh = UsdGeom.Mesh(prim)
+        pts_attr = mesh.GetPointsAttr().Get()
+        idx_attr = mesh.GetFaceVertexIndicesAttr().Get()
+        if pts_attr is None or idx_attr is None:
+            logger.warning("Mesh prim %s has no points or indices, skipping", prim.GetPath())
+            continue
+        points = np.array([[p[0], p[1], p[2]] for p in pts_attr], dtype=np.float32)
+        indices = np.array(list(idx_attr), dtype=np.int32)
+        meshes.append((points, indices))
+        logger.info("Loaded mesh %s: %d verts, %d tris", prim.GetPath(), len(points), len(indices) // 3)
+
+    if not meshes:
+        raise RuntimeError(f"No UsdGeom.Mesh prims found in {usd_path}")
+    return meshes
+
+
+def write_cropped_usd(
+    meshes: List[Tuple[np.ndarray, np.ndarray]],
+    output_path: str,
+) -> None:
+    """Write filtered mesh data to a new USD file.
+
+    Args:
+        meshes: List of (points [N,3], indices [M,]) tuples.
+        output_path: Destination USD file path (will be overwritten).
+    """
+    try:
+        from pxr import Usd, UsdGeom, Vt, Gf
+    except ImportError as e:
+        raise RuntimeError("pxr (OpenUSD) is required") from e
+
+    stage = Usd.Stage.CreateNew(output_path)
+    root = stage.DefinePrim("/Landscape", "Xform")
+    stage.SetDefaultPrim(root)
+
+    for i, (points, indices) in enumerate(meshes):
+        mesh_path = f"/Landscape/mesh_{i}"
+        mesh = UsdGeom.Mesh.Define(stage, mesh_path)
+        vt_pts = Vt.Vec3fArray([Gf.Vec3f(float(p[0]), float(p[1]), float(p[2])) for p in points])  # explicit float() cast required by Boost.Python binding
+        mesh.GetPointsAttr().Set(vt_pts)
+        mesh.GetFaceVertexIndicesAttr().Set(Vt.IntArray(indices.tolist()))
+        n_tris = indices.shape[0] // 3
+        mesh.GetFaceVertexCountsAttr().Set(Vt.IntArray([3] * n_tris))
+        logger.info("Wrote mesh %s: %d verts, %d tris", mesh_path, points.shape[0], n_tris)
+
+    stage.GetRootLayer().Save()
+
+
+def generate_cropped_variants(
+    source_usd: str,
+    terrain_size: float,
+    pose_offset: Tuple[float, float],
+    terrain_center: Tuple[float, float],
+    scales: List[int],
+    output_dir: str,
+) -> None:
+    """Generate pre-cropped USD files for each requested scale.
+
+    For each scale N, produces {stem}_{N}x{suffix} in output_dir.
+
+    Args:
+        source_usd: Path to the full-size source USD file.
+        terrain_size: Main terrain side length in meters.
+        pose_offset: (tx, ty) XY pose translation from YAML pose.position.
+        terrain_center: (cx, cy) world-space terrain centre.
+        scales: List of integer scale multipliers (e.g. [5, 10, 20]).
+        output_dir: Directory where cropped USD files are written.
+    """
+    meshes = load_usd_meshes(source_usd)
+    local_cx, local_cy = compute_local_center(terrain_center, pose_offset)
+    stem, suffix = os.path.splitext(os.path.basename(source_usd))
+
+    for scale in scales:
+        half = scale * terrain_size / 2.0
+        cropped = []
+        total_tris_before = 0
+        total_tris_after = 0
+        for points, indices in meshes:
+            total_tris_before += indices.shape[0] // 3
+            out_pts, out_idx = crop_mesh(points, indices, local_cx, local_cy, half)
+            total_tris_after += out_idx.shape[0] // 3
+            cropped.append((out_pts, out_idx))
+
+        out_name = f"{stem}_{scale}x{suffix}"
+        out_path = os.path.join(output_dir, out_name)
+        write_cropped_usd(cropped, out_path)
+        logger.info(
+            "Scale %dx → %s  (%d → %d tris, %.1f%% kept)",
+            scale, out_path,
+            total_tris_before, total_tris_after,
+            100.0 * total_tris_after / total_tris_before if total_tris_before else 0,
+        )
