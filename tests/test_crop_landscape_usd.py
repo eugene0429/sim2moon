@@ -169,8 +169,6 @@ class TestUsdIO:
             generate_cropped_variants(
                 source_usd=src,
                 terrain_size=40.0,
-                pose_offset=(0.0, 0.0),
-                terrain_center=(0.0, 0.0),
                 scales=[2, 3],
                 output_dir=tmpdir,
             )

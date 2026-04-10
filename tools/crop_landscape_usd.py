@@ -1,15 +1,17 @@
 """Offline tool to generate pre-cropped USD landscape variants.
 
 Loads a source USD mesh, filters triangles within a scale-based AABB
-around the main terrain centre, and writes new USD files for each
-requested crop scale.
+centred at the mesh bounding box centre, and writes new USD files for
+each requested crop scale.
+
+The crop centre is auto-detected from the combined bounding box of all
+mesh prims in the source USD.  Use --crop-center to override when a
+specific local-coordinate centre is required.
 
 Usage:
     python tools/crop_landscape_usd.py \\
         --source assets/Terrains/landscape_cropped/landscape_cropped.usd \\
         --terrain-size 40 \\
-        --pose-offset -20405.6 -9502.6 561.8 \\
-        --terrain-center 20 20 \\
         --scales 5 10 20 \\
         --output-dir assets/Terrains/landscape_cropped/
 """
@@ -18,7 +20,7 @@ import argparse
 import logging
 import os
 import sys
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -177,25 +179,48 @@ def write_cropped_usd(
 def generate_cropped_variants(
     source_usd: str,
     terrain_size: float,
-    pose_offset: Tuple[float, float],
-    terrain_center: Tuple[float, float],
     scales: List[int],
     output_dir: str,
+    crop_center: Optional[Tuple[float, float]] = None,
 ) -> None:
     """Generate pre-cropped USD files for each requested scale.
 
-    For each scale N, produces {stem}_{N}x{suffix} in output_dir.
+    For each scale N, produces ``{stem}_{N}x{suffix}`` in output_dir.
+
+    The crop AABB is centred at ``crop_center`` (in USD local coordinates).
+    If ``crop_center`` is None, the centre is auto-detected as the
+    mid-point of the combined bounding box of all mesh prims.  This
+    auto-detection is correct for large background landscapes whose
+    coordinate frame is independent of the main simulation terrain.
 
     Args:
         source_usd: Path to the full-size source USD file.
-        terrain_size: Main terrain side length in meters.
-        pose_offset: (tx, ty) XY pose translation from YAML pose.position.
-        terrain_center: (cx, cy) world-space terrain centre.
+        terrain_size: Reference size in the same units as the USD vertices.
+            The crop half-extent for scale N is ``N * terrain_size / 2``.
         scales: List of integer scale multipliers (e.g. [5, 10, 20]).
         output_dir: Directory where cropped USD files are written.
+        crop_center: Optional (cx, cy) crop centre in USD local coords.
+            Defaults to the bounding box centre of the largest mesh prim.
     """
     meshes = load_usd_meshes(source_usd)
-    local_cx, local_cy = compute_local_center(terrain_center, pose_offset)
+
+    # Auto-detect crop centre from the largest mesh bounding box.
+    if crop_center is None:
+        largest = max(meshes, key=lambda m: m[0].shape[0])
+        pts = largest[0]
+        local_cx = float((pts[:, 0].min() + pts[:, 0].max()) / 2.0)
+        local_cy = float((pts[:, 1].min() + pts[:, 1].max()) / 2.0)
+        logger.info(
+            "Auto-detected crop centre from mesh bbox: (%.1f, %.1f) "
+            "[x: %.1f–%.1f, y: %.1f–%.1f]",
+            local_cx, local_cy,
+            float(pts[:, 0].min()), float(pts[:, 0].max()),
+            float(pts[:, 1].min()), float(pts[:, 1].max()),
+        )
+    else:
+        local_cx, local_cy = float(crop_center[0]), float(crop_center[1])
+        logger.info("Using explicit crop centre: (%.1f, %.1f)", local_cx, local_cy)
+
     stem, suffix = os.path.splitext(os.path.basename(source_usd))
 
     for scale in scales:
@@ -228,13 +253,13 @@ def main() -> None:
     )
     parser.add_argument("--source", required=True, help="Source USD file path")
     parser.add_argument("--terrain-size", type=float, required=True,
-                        help="Main terrain side length in meters (square assumed)")
-    parser.add_argument("--pose-offset", type=float, nargs=3, required=True,
-                        metavar=("TX", "TY", "TZ"),
-                        help="XY(Z) pose translation from YAML pose.position")
-    parser.add_argument("--terrain-center", type=float, nargs=2,
+                        help="Reference size in USD vertex units used to compute crop half-extent "
+                             "(half = scale * terrain_size / 2).  For a km-scale landscape whose "
+                             "vertices are in metres, pass the terrain size in metres (e.g. 40).")
+    parser.add_argument("--crop-center", type=float, nargs=2,
                         metavar=("CX", "CY"),
-                        help="World-space terrain centre (default: terrain_size/2 each)")
+                        help="Crop centre in USD local coordinates.  "
+                             "Default: auto-detected from the largest mesh bounding box centre.")
     parser.add_argument("--scales", type=int, nargs="+", default=[5, 10, 20],
                         help="Crop scale multipliers to generate (default: 5 10 20)")
     parser.add_argument("--output-dir", default=None,
@@ -246,23 +271,16 @@ def main() -> None:
         print(f"ERROR: source USD not found: {source}", file=sys.stderr)
         sys.exit(1)
 
-    terrain_size = args.terrain_size
-    pose_offset = (args.pose_offset[0], args.pose_offset[1])
-    if args.terrain_center:
-        terrain_center = tuple(args.terrain_center)
-    else:
-        terrain_center = (terrain_size / 2.0, terrain_size / 2.0)
-
+    crop_center = tuple(args.crop_center) if args.crop_center else None
     output_dir = args.output_dir or os.path.dirname(os.path.abspath(source))
     os.makedirs(output_dir, exist_ok=True)
 
     generate_cropped_variants(
         source_usd=source,
-        terrain_size=terrain_size,
-        pose_offset=pose_offset,
-        terrain_center=terrain_center,
+        terrain_size=args.terrain_size,
         scales=args.scales,
         output_dir=output_dir,
+        crop_center=crop_center,
     )
 
 

@@ -7,3 +7,6 @@ build/
 .pytest_cache/
 outputs/
 .hydra/
+
+# Pre-cropped landscape USD variants (generated offline, not committed)
+assets/Terrains/landscape_cropped/landscape_cropped_*x.usd
