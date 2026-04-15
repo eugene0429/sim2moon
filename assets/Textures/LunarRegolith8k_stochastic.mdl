@@ -1,0 +1,193 @@
+// LunarRegolith8k with hex-grid stochastic tiling.
+// Each tile gets a continuous random rotation (0~360) + UV offset.
+// Three overlapping hex samples blended with smooth falloff.
+// Uses world-space coordinates for consistent density across meshes.
+
+mdl 1.8;
+
+import ::math::*;
+import ::state::*;
+import ::tex::*;
+import ::base::*;
+import ::df::*;
+import ::anno::*;
+
+// --- Hash utilities ---
+
+float mdl_fract(float x) { return x - math::floor(x); }
+
+float2 hash22(float2 p)
+{
+    float2 q = float2(
+        math::dot(p, float2(127.1, 311.7)),
+        math::dot(p, float2(269.5, 183.3)));
+    return float2(mdl_fract(math::sin(q.x) * 43758.5453),
+                  mdl_fract(math::sin(q.y) * 43758.5453));
+}
+
+float2 rotate_continuous(float2 uv, float hash_val)
+{
+    float angle = hash_val * 2.0 * 3.14159265;
+    float c = math::cos(angle);
+    float s = math::sin(angle);
+    return float2(uv.x * c - uv.y * s,
+                  uv.x * s + uv.y * c);
+}
+
+
+export material LunarRegolith8k_stochastic(
+    // Textures
+    uniform texture_2d diff_tex = texture_2d(
+        "./LunarRegolith8k/LunarRegolith8k_diff.png", ::tex::gamma_default, "")
+    [[ anno::hidden() ]],
+    uniform texture_2d rough_tex = texture_2d(
+        "./LunarRegolith8k/LunarRegolith8k_rough.png", ::tex::gamma_default, "")
+    [[ anno::hidden() ]],
+    uniform texture_2d ao_tex = texture_2d(
+        "./LunarRegolith8k/LunarRegolith8k_ao.png", ::tex::gamma_srgb, "")
+    [[ anno::hidden() ]],
+    uniform texture_2d norm_tex = texture_2d(
+        "./LunarRegolith8k/LunarRegolith8k_nor_gl.png", ::tex::gamma_linear, "")
+    [[ anno::hidden() ]],
+
+    // Tiling
+    float base_scale = 0.5 [[ anno::display_name("Base Scale"),
+        anno::description("Texture density — matches LunarRegolith8k") ]],
+    float tile_size  = 1.0 [[ anno::display_name("Tile Size"),
+        anno::description("Stochastic tile size in UV units. Larger = fewer seams.") ]],
+
+    // PBR (matching LunarRegolith8k)
+    color diffuse_tint        = color(1.0) [[ anno::display_name("Diffuse Tint") ]],
+    float albedo_add          = 1.0  [[ anno::display_name("Albedo Add") ]],
+    float albedo_brightness   = 1.0  [[ anno::display_name("Albedo Brightness") ]],
+    float specular_level      = 0.26 [[ anno::display_name("Specular Level") ]],
+    float roughness_constant  = 1.0  [[ anno::display_name("Roughness Constant") ]],
+    float roughness_influence = 0.13 [[ anno::display_name("Roughness Influence") ]],
+    float bump_strength       = 0.8  [[ anno::display_name("Bump Strength") ]],
+    float ao_strength         = 0.35 [[ anno::display_name("AO Strength") ]]
+)
+= let {
+    // --- World-space UV ---
+    float3 wp = state::transform_point(
+        state::coordinate_internal, state::coordinate_world, state::position());
+    float2 uv_world = float2(wp.x, wp.y) * base_scale;
+
+    // --- Hex grid decomposition ---
+    float2 hex_uv = uv_world / tile_size;
+
+    float row = math::floor(hex_uv.y);
+    float is_odd = mdl_fract(row * 0.5) > 0.24 ? 1.0 : 0.0;
+    float2 skewed = float2(hex_uv.x + is_odd * 0.5, hex_uv.y);
+
+    float2 cell = float2(math::floor(skewed.x), math::floor(skewed.y));
+    float2 frac_pos = float2(mdl_fract(skewed.x), mdl_fract(skewed.y));
+
+    // Three nearest cells
+    float2 cell0 = cell;
+    float2 cell1 = (frac_pos.x + frac_pos.y > 1.0)
+        ? cell + float2(1.0, 1.0)
+        : cell + float2(-1.0, 0.0);
+    float2 cell2 = (frac_pos.x > frac_pos.y)
+        ? cell + float2(1.0, 0.0)
+        : cell + float2(0.0, 1.0);
+
+    // Distance-based blend weights (1/d^4)
+    float2 c0 = cell0 + float2(0.5, 0.5);
+    float2 c1 = cell1 + float2(0.5, 0.5);
+    float2 c2 = cell2 + float2(0.5, 0.5);
+
+    float d0 = math::length(skewed - c0);
+    float d1 = math::length(skewed - c1);
+    float d2 = math::length(skewed - c2);
+
+    float w0r = 1.0 / math::max(d0 * d0 * d0 * d0, 0.0001);
+    float w1r = 1.0 / math::max(d1 * d1 * d1 * d1, 0.0001);
+    float w2r = 1.0 / math::max(d2 * d2 * d2 * d2, 0.0001);
+    float ws = w0r + w1r + w2r;
+    float w0 = w0r / ws;
+    float w1 = w1r / ws;
+    float w2 = w2r / ws;
+
+    // --- Per-cell random transform: continuous rotation + offset ---
+    float2 h0 = hash22(cell0);
+    float2 h1 = hash22(cell1);
+    float2 h2 = hash22(cell2);
+
+    float2 uv0 = rotate_continuous(uv_world, h0.x) + h0 * 1000.0;
+    float2 uv1 = rotate_continuous(uv_world, h1.x) + h1 * 1000.0;
+    float2 uv2 = rotate_continuous(uv_world, h2.x) + h2 * 1000.0;
+
+    // --- Diffuse ---
+    float4 d0s = tex::lookup_float4(diff_tex, uv0, tex::wrap_repeat, tex::wrap_repeat);
+    float4 d1s = tex::lookup_float4(diff_tex, uv1, tex::wrap_repeat, tex::wrap_repeat);
+    float4 d2s = tex::lookup_float4(diff_tex, uv2, tex::wrap_repeat, tex::wrap_repeat);
+
+    float3 diff_blend = float3(d0s.x, d0s.y, d0s.z) * w0
+                      + float3(d1s.x, d1s.y, d1s.z) * w1
+                      + float3(d2s.x, d2s.y, d2s.z) * w2;
+
+    float3 diff_tinted = diff_blend * float3(diffuse_tint);
+    float3 diff_final  = (diff_tinted + albedo_add) * albedo_brightness;
+
+    // --- AO ---
+    float ao0 = tex::lookup_float4(ao_tex, uv0, tex::wrap_repeat, tex::wrap_repeat).x;
+    float ao1 = tex::lookup_float4(ao_tex, uv1, tex::wrap_repeat, tex::wrap_repeat).x;
+    float ao2 = tex::lookup_float4(ao_tex, uv2, tex::wrap_repeat, tex::wrap_repeat).x;
+    float ao_v = ao0 * w0 + ao1 * w1 + ao2 * w2;
+    float3 diffuse_ao = diff_final * math::lerp(1.0, ao_v, ao_strength);
+
+    color base_color = color(
+        math::clamp(diffuse_ao.x, 0.0, 1.0),
+        math::clamp(diffuse_ao.y, 0.0, 1.0),
+        math::clamp(diffuse_ao.z, 0.0, 1.0));
+
+    // --- Roughness ---
+    float r0 = tex::lookup_float4(rough_tex, uv0, tex::wrap_repeat, tex::wrap_repeat).x;
+    float r1 = tex::lookup_float4(rough_tex, uv1, tex::wrap_repeat, tex::wrap_repeat).x;
+    float r2 = tex::lookup_float4(rough_tex, uv2, tex::wrap_repeat, tex::wrap_repeat).x;
+    float r_blend = r0 * w0 + r1 * w1 + r2 * w2;
+    float roughness = math::lerp(roughness_constant, r_blend, roughness_influence);
+    float alpha = roughness * roughness;
+
+    // --- Normal ---
+    float4 n0s = tex::lookup_float4(norm_tex, uv0, tex::wrap_repeat, tex::wrap_repeat);
+    float4 n1s = tex::lookup_float4(norm_tex, uv1, tex::wrap_repeat, tex::wrap_repeat);
+    float4 n2s = tex::lookup_float4(norm_tex, uv2, tex::wrap_repeat, tex::wrap_repeat);
+    float3 n0 = float3(n0s.x * 2.0 - 1.0, n0s.y * 2.0 - 1.0, n0s.z * 2.0 - 1.0);
+    float3 n1 = float3(n1s.x * 2.0 - 1.0, n1s.y * 2.0 - 1.0, n1s.z * 2.0 - 1.0);
+    float3 n2 = float3(n2s.x * 2.0 - 1.0, n2s.y * 2.0 - 1.0, n2s.z * 2.0 - 1.0);
+    float3 n_blend = math::normalize(n0 * w0 + n1 * w1 + n2 * w2);
+    float3 nb = math::normalize(float3(
+        n_blend.x * bump_strength,
+        n_blend.y * bump_strength,
+        n_blend.z));
+    float3 shading_normal = math::normalize(
+        nb.x * state::texture_tangent_u(0) +
+        nb.y * state::texture_tangent_v(0) +
+        nb.z * state::normal());
+
+    // --- IOR ---
+    float f0 = 0.08 * specular_level;
+    float sq = math::sqrt(math::max(f0, 0.0001));
+    float ior_val = (1.0 + sq) / (1.0 - sq);
+
+} in material(
+    surface: material_surface(
+        scattering: df::fresnel_layer(
+            ior:   ior_val,
+            layer: df::microfacet_ggx_smith_bsdf(
+                roughness_u: alpha,
+                roughness_v: alpha,
+                tint:        color(1.0),
+                mode:        df::scatter_reflect
+            ),
+            base: df::diffuse_reflection_bsdf(
+                tint: base_color
+            ),
+            weight: 1.0
+        )
+    ),
+    geometry: material_geometry(
+        normal: shading_normal
+    )
+);

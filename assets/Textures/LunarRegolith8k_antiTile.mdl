@@ -1,0 +1,182 @@
+// LunarRegolith8k with multi-scale tiling and noise modulation.
+// Uses world-space coordinates (matching project_uvw behavior) to ensure
+// consistent texture density with the central terrain.
+
+mdl 1.8;
+
+import ::math::*;
+import ::state::*;
+import ::tex::*;
+import ::base::*;
+import ::df::*;
+import ::anno::*;
+
+// --- Noise (fully unrolled, MDL-safe) ---
+
+float mdl_fract(float x) { return x - math::floor(x); }
+
+float hash2d(float2 p)
+{
+    float h = p.x * 127.1 + p.y * 311.7;
+    return mdl_fract(math::sin(h) * 43758.5453);
+}
+
+float vnoise(float2 p)
+{
+    float ix = math::floor(p.x);
+    float iy = math::floor(p.y);
+    float fx = p.x - ix;
+    float fy = p.y - iy;
+    float ux = fx * fx * (3.0 - 2.0 * fx);
+    float uy = fy * fy * (3.0 - 2.0 * fy);
+    float a = hash2d(float2(ix,       iy));
+    float b = hash2d(float2(ix + 1.0, iy));
+    float c = hash2d(float2(ix,       iy + 1.0));
+    float d = hash2d(float2(ix + 1.0, iy + 1.0));
+    return math::lerp(math::lerp(a, b, ux),
+                      math::lerp(c, d, ux), uy);
+}
+
+float fbm4(float2 p)
+{
+    return 0.5    * vnoise(p)
+         + 0.25   * vnoise(p * 2.0)
+         + 0.125  * vnoise(p * 4.0)
+         + 0.0625 * vnoise(p * 8.0);
+}
+
+
+export material LunarRegolith8k_antiTile(
+    // Textures (same as LunarRegolith8k)
+    uniform texture_2d diff_tex = texture_2d(
+        "./LunarRegolith8k/LunarRegolith8k_diff.png", ::tex::gamma_default, "")
+    [[ anno::hidden() ]],
+    uniform texture_2d rough_tex = texture_2d(
+        "./LunarRegolith8k/LunarRegolith8k_rough.png", ::tex::gamma_default, "")
+    [[ anno::hidden() ]],
+    uniform texture_2d ao_tex = texture_2d(
+        "./LunarRegolith8k/LunarRegolith8k_ao.png", ::tex::gamma_srgb, "")
+    [[ anno::hidden() ]],
+    uniform texture_2d norm_tex = texture_2d(
+        "./LunarRegolith8k/LunarRegolith8k_nor_gl.png", ::tex::gamma_linear, "")
+    [[ anno::hidden() ]],
+
+    // Base texture scale (matches LunarRegolith8k: 0.5)
+    float base_scale = 0.5 [[ anno::display_name("Base Scale") ]],
+
+    // Multi-scale ratios relative to base_scale
+    float mid_ratio  = 0.14 [[ anno::display_name("Mid Scale Ratio"),
+        anno::description("mid_uv = base_uv * mid_ratio") ]],
+    float far_ratio  = 0.016 [[ anno::display_name("Far Scale Ratio"),
+        anno::description("far_uv = base_uv * far_ratio") ]],
+
+    // Blend weights
+    float near_weight = 0.2 [[ anno::display_name("Near Weight") ]],
+    float mid_weight  = 0.3 [[ anno::display_name("Mid Weight") ]],
+    float far_weight  = 0.5 [[ anno::display_name("Far Weight") ]],
+
+    // Noise
+    float noise_frequency = 0.001 [[ anno::display_name("Noise Frequency") ]],
+    float noise_strength  = 0.15  [[ anno::display_name("Noise Strength") ]],
+
+    // PBR (matching LunarRegolith8k exactly)
+    color diffuse_tint        = color(1.0) [[ anno::display_name("Diffuse Tint") ]],
+    float albedo_add          = 1.0  [[ anno::display_name("Albedo Add") ]],
+    float albedo_brightness   = 1.0  [[ anno::display_name("Albedo Brightness") ]],
+    float specular_level      = 0.26 [[ anno::display_name("Specular Level") ]],
+    float roughness_constant  = 1.0  [[ anno::display_name("Roughness Constant") ]],
+    float roughness_influence = 0.13 [[ anno::display_name("Roughness Influence") ]],
+    float bump_strength       = 0.8  [[ anno::display_name("Bump Strength") ]],
+    float ao_strength         = 0.35 [[ anno::display_name("AO Strength") ]]
+)
+= let {
+    // --- World-space UV (same as OmniPBR project_uvw + world_or_object) ---
+    float3 wp = state::transform_point(
+        state::coordinate_internal, state::coordinate_world, state::position());
+    float2 uv_world = float2(wp.x, wp.y);
+
+    // Three UV scales
+    float2 uv_near = uv_world * base_scale;
+    float2 uv_mid  = uv_world * base_scale * mid_ratio;
+    float2 uv_far  = uv_world * base_scale * far_ratio;
+
+    // --- Diffuse: multi-scale blend ---
+    float4 d_n = tex::lookup_float4(diff_tex, uv_near, tex::wrap_repeat, tex::wrap_repeat);
+    float4 d_m = tex::lookup_float4(diff_tex, uv_mid,  tex::wrap_repeat, tex::wrap_repeat);
+    float4 d_f = tex::lookup_float4(diff_tex, uv_far,  tex::wrap_repeat, tex::wrap_repeat);
+
+    float wt = near_weight + mid_weight + far_weight;
+    float wn = near_weight / wt;
+    float wm = mid_weight  / wt;
+    float wf = far_weight  / wt;
+
+    float3 diff_blend = float3(d_n.x, d_n.y, d_n.z) * wn
+                      + float3(d_m.x, d_m.y, d_m.z) * wm
+                      + float3(d_f.x, d_f.y, d_f.z) * wf;
+
+    // --- Albedo adjustments (matching OmniPBR pipeline) ---
+    float3 diff_tinted = diff_blend * float3(diffuse_tint);
+    float3 diff_added  = (diff_tinted + albedo_add) * albedo_brightness;
+
+    // --- Noise brightness modulation ---
+    float noise = fbm4(uv_world * noise_frequency);
+    float bright = 1.0 + (noise - 0.5) * noise_strength * 2.0;
+    float3 diffuse_final = diff_added * bright;
+
+    // --- AO (multi-scale) ---
+    float ao_n = tex::lookup_float4(ao_tex, uv_near, tex::wrap_repeat, tex::wrap_repeat).x;
+    float ao_f = tex::lookup_float4(ao_tex, uv_far,  tex::wrap_repeat, tex::wrap_repeat).x;
+    float ao_v = math::lerp(ao_n, ao_f, 0.5);
+    float3 diffuse_ao = diffuse_final * math::lerp(1.0, ao_v, ao_strength);
+
+    color base_color = color(
+        math::clamp(diffuse_ao.x, 0.0, 1.0),
+        math::clamp(diffuse_ao.y, 0.0, 1.0),
+        math::clamp(diffuse_ao.z, 0.0, 1.0));
+
+    // --- Roughness (multi-scale) ---
+    float r_n = tex::lookup_float4(rough_tex, uv_near, tex::wrap_repeat, tex::wrap_repeat).x;
+    float r_m = tex::lookup_float4(rough_tex, uv_mid,  tex::wrap_repeat, tex::wrap_repeat).x;
+    float r_tex = math::lerp(r_n, r_m, 0.5);
+    float roughness = math::lerp(roughness_constant, r_tex, roughness_influence);
+    float alpha = roughness * roughness;
+
+    // --- Normal (multi-scale blend) ---
+    float4 nn = tex::lookup_float4(norm_tex, uv_near, tex::wrap_repeat, tex::wrap_repeat);
+    float4 nm = tex::lookup_float4(norm_tex, uv_mid,  tex::wrap_repeat, tex::wrap_repeat);
+    float3 n1 = float3(nn.x * 2.0 - 1.0, nn.y * 2.0 - 1.0, nn.z * 2.0 - 1.0);
+    float3 n2 = float3(nm.x * 2.0 - 1.0, nm.y * 2.0 - 1.0, nm.z * 2.0 - 1.0);
+    float3 nb = math::normalize(float3(
+        (n1.x * 0.7 + n2.x * 0.3) * bump_strength,
+        (n1.y * 0.7 + n2.y * 0.3) * bump_strength,
+        1.0));
+    float3 shading_normal = math::normalize(
+        nb.x * state::texture_tangent_u(0) +
+        nb.y * state::texture_tangent_v(0) +
+        nb.z * state::normal());
+
+    // --- IOR from specular level (OmniPBR formula) ---
+    float f0 = 0.08 * specular_level;
+    float sq = math::sqrt(math::max(f0, 0.0001));
+    float ior_val = (1.0 + sq) / (1.0 - sq);
+
+} in material(
+    surface: material_surface(
+        scattering: df::fresnel_layer(
+            ior:   ior_val,
+            layer: df::microfacet_ggx_smith_bsdf(
+                roughness_u: alpha,
+                roughness_v: alpha,
+                tint:        color(1.0),
+                mode:        df::scatter_reflect
+            ),
+            base: df::diffuse_reflection_bsdf(
+                tint: base_color
+            ),
+            weight: 1.0
+        )
+    ),
+    geometry: material_geometry(
+        normal: shading_normal
+    )
+);

@@ -9,8 +9,8 @@ outputs/
 .hydra/
 tmp/
 
-# Assets (downloaded via scripts)
-assets/
+# SouthPole DEM data (downloaded via scripts, ~7.5GB)
+assets/Terrains/SouthPole/
 
 # Claude Code / Superpowers development metadata
 .claude/
