@@ -101,8 +101,8 @@ class BaseTerrainGeneratorConf:
         assert self.x_size > 0, "x_size must be positive"
         assert self.y_size > 0, "y_size must be positive"
         assert self.resolution > 0, "resolution must be positive"
-        assert self.max_elevation > self.min_elevation, (
-            "max_elevation must be greater than min_elevation"
+        assert self.max_elevation >= self.min_elevation, (
+            "max_elevation must be greater than or equal to min_elevation"
         )
         assert self.z_scale > 0, "z_scale must be positive"
 
@@ -256,6 +256,7 @@ class LandscapeConf:
     crop_size: float = 500.0
     target_resolution: float = 5.0
     hole_margin: float = 2.0
+    max_slope: float = 8.0
     texture_path: str = ""
     mesh_prim_path: str = "/LunarYard/Landscape"
 
@@ -263,6 +264,7 @@ class LandscapeConf:
         assert self.crop_size > 0, "crop_size must be positive"
         assert self.target_resolution > 0, "target_resolution must be positive"
         assert self.hole_margin >= 0, "hole_margin must be non-negative"
+        assert self.max_slope > 0, "max_slope must be positive"
 
 
 @dataclasses.dataclass
@@ -280,6 +282,8 @@ class TerrainManagerConf:
     sim_width: float = 40.0
     resolution: float = 0.02
     augmentation: bool = False
+    tilt_angle: float = 0.0
+    tilt_direction: float = 0.0
 
     def __post_init__(self):
         if isinstance(self.moon_yard, dict):
@@ -290,3 +294,17 @@ class TerrainManagerConf:
         assert len(self.mesh_position) == 3, "mesh_position must have 3 elements"
         assert len(self.mesh_orientation) == 4, "mesh_orientation must have 4 elements"
         assert len(self.mesh_scale) == 3, "mesh_scale must have 3 elements"
+        assert 0.0 <= self.tilt_angle < 90.0, "tilt_angle must be in [0, 90) degrees"
+        assert 0.0 <= self.tilt_direction < 360.0, "tilt_direction must be in [0, 360) degrees"
+
+        # Auto-propagate top-level dimensions/resolution to sub-configs
+        # so they don't need to be duplicated in YAML.
+        my = self.moon_yard
+        my.base_terrain_generator.x_size = self.sim_width
+        my.base_terrain_generator.y_size = self.sim_length
+        my.base_terrain_generator.resolution = self.resolution
+        my.crater_distribution.x_size = self.sim_width
+        my.crater_distribution.y_size = self.sim_length
+        my.deformation_engine.terrain_width = self.sim_width
+        my.deformation_engine.terrain_height = self.sim_length
+        my.deformation_engine.terrain_resolution = self.resolution

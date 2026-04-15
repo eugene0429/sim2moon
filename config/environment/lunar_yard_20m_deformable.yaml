@@ -1,0 +1,180 @@
+# @package _global_
+name: LunarYard
+seed: 42
+physics_dt: 0.0333
+rendering_dt: 0.0333
+enforce_realtime: true
+mode: ROS2
+
+lunaryard_settings:
+  lab_length: 20.0
+  lab_width: 20.0
+  resolution: 0.025
+  root_path: /LunarYard
+  coordinates:
+    latitude: 46.8
+    longitude: -26.3
+
+terrain_manager:
+  sim_length: 20.0
+  sim_width: 20.0
+  resolution: 0.025
+  root_path: /LunarYard
+  texture_path: /LunarYard/Looks/Basalt
+  dems_path: Terrains/Lunaryard
+  moon_yard:
+    is_yard: true
+    crater_generator:
+      profiles_path: assets/Terrains/crater_spline_profiles.pkl
+      z_scale: 0.5
+      seed: 42
+    crater_distribution:
+      densities: [0.025, 0.05, 0.5]
+      radius: [[1.5, 2.5], [0.75, 1.5], [0.25, 0.5]]
+      num_repeat: 1
+      seed: 42
+    base_terrain_generator:
+      resolution: 0.025
+      max_elevation: 0.5
+      min_elevation: -0.5
+      z_scale: 0.5
+      seed: 42
+    deformation_engine:
+      enable: true
+      delay: 2.0
+      num_links: 4
+      footprint:
+        width: 0.25
+        height: 0.1
+      deform_constrain:
+        x_deform_offset: 0.0
+        y_deform_offset: 0.0
+        deform_decay_ratio: 0.01
+      boundary_distribution:
+        distribution: trapezoidal
+        angle_of_repose: 1.047
+      depth_distribution:
+        distribution: sinusoidal
+        wave_frequency: 4.14
+      force_depth_regression:
+        amplitude_slope: 0.00006
+        amplitude_intercept: 0.008
+        mean_slope: -0.00046
+        mean_intercept: -0.0013
+
+# Bekker-Janosi terramechanics for wheel-terrain interaction.
+# When disabled, only PhysX rigid-body friction is used.
+terramechanics_settings:
+  enable: false
+  contact_force_ema: 0.7  # EMA smoothing for PhysX contact forces (0=raw, 0.7=smooth)
+  robot:
+    mass: 50.0            # rover total mass (kg)
+    num_wheels: 4
+    wheel_radius: 0.165   # Husky wheel radius (m)
+    wheel_width: 0.1      # wheel contact patch width (m)
+    wheel_lug_height: 0.01  # grouser height protruding from wheel surface (m)
+    wheel_lug_count: 16     # number of grousers around wheel circumference
+  soil:
+    # Bekker pressure-sinkage parameters (lunar regolith defaults)
+    k_c: 1400.0           # cohesive modulus (N/m^(n+1))
+    k_phi: 820000.0       # frictional modulus (N/m^(n+2))
+    n: 1.0                # sinkage exponent
+    # Mohr-Coulomb shear strength
+    c: 170.0              # cohesion (Pa) — lower = more slippery
+    phi_deg: 35.0         # friction angle (degrees) — lower = more slippery
+    K: 0.018              # shear deformation modulus (m) — higher = more slippery
+    # Other
+    rho: 1500.0           # bulk density (kg/m^3)
+    gravity: 1.625        # surface gravity (m/s^2)
+    slip_sinkage_coeff: 0.5  # slip-sinkage coupling (0=off, 0.5=moderate)
+    # Soil heterogeneity (non-uniform terrain)
+    heterogeneity: 0.0    # variation intensity (0=uniform, 0.5~0.8=realistic)
+    heterogeneity_scale: 2.0  # patch size in meters
+    heterogeneity_seed: 42
+
+starfield_settings:
+  enable: true
+
+stellar_engine_settings:
+  start_date:
+    year: 2024
+    month: 5
+    day: 21
+    hour: 5
+    minute: 1
+  time_scale: 1
+  update_interval: 600
+  ephemeris_path: assets/Ephemeris
+
+sun_settings:
+  intensity: 1750.0
+  angle: 0.53
+  color: [1.0, 1.0, 1.0]
+  temperature: 6500.0
+  azimuth: 180.0
+  elevation: 45.0
+
+earth_settings:
+  texture_path: assets/Textures/Earth/earth_color_with_clouds.tif
+  scale: 50.0
+  enable: true
+
+rocks_settings:
+  enable: true
+  instancers_path: /LunarYard/Rocks
+  assets_root: assets/USD_Assets/rocks
+  rocks_settings:
+    medium_rocks:
+      seed: 42
+      collections: ["apollo_rocks"]
+      realistic_distribution:
+        method: clustered_scatter
+        resolution: 0.025
+        lambda_parent: 0.25
+        lambda_daughter: 50
+        sigma: 0.2
+        d_min: 0.3
+        d_max: 0.3
+        alpha: 2.5
+        density: 0.5
+    large_rocks:
+      seed: 42
+      collections: ["apollo_rocks"]
+      realistic_distribution:
+        method: clustered_scatter
+        resolution: 0.025
+        lambda_parent: 0.25
+        lambda_daughter: 5
+        sigma: 0.05
+        d_min: 0.6
+        d_max: 1.5
+        alpha: 2.2
+        density: 0.3
+    small_rocks:
+      seed: 42
+      collections: ["apollo_rocks"]
+      realistic_distribution:
+        method: clustered_scatter
+        resolution: 0.025
+        lambda_parent: 0.5
+        lambda_daughter: 500
+        sigma: 0.3
+        d_min: 0.03
+        d_max: 0.15
+        alpha: 3.0
+        density: 2.0
+
+robots_settings:
+  uses_nucleus: false
+  is_ROS2: true
+  max_robots: 5
+  robots_root: "/Robots"
+  parameters:
+    - robot_name: husky
+      usd_path: assets/USD_Assets/robots/ros2_husky_PhysX_vlp16.usd
+      pose:
+        position: [5.0, 5.0, 0.5]
+        orientation: [1, 0, 0, 0]
+      domain_id: 0
+      target_links: ["front_left_wheel_link", "front_right_wheel_link", "rear_left_wheel_link", "rear_right_wheel_link"]
+      base_link: "base_link"

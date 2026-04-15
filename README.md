@@ -112,20 +112,66 @@ $HOME/isaacsim/python.sh -m pip install hydra-core omegaconf numpy
 # For celestial simulation
 $HOME/isaacsim/python.sh -m pip install skyfield scipy
 
+# For DEM processing (optional, only needed for downloading South Pole terrain)
+pip install gdal pyyaml
+
 # Development tools (optional)
 $HOME/isaacsim/python.sh -m pip install pytest
 ```
 
-### 4. Verify Assets
+### 4. Download Assets
 
-Ensure the following items exist in the `assets/` directory:
+The simulation requires several external data assets that are not included in the repository.
+
+#### 4.1 Ephemeris Data (Required)
+
+JPL NAIF kernel files for accurate sun/earth positioning:
+
+```bash
+./scripts/get_ephemeris_data.sh
+```
+
+This downloads the following files to `assets/Ephemeris/`:
+- `de421.bsp` — JPL DE421 planetary ephemeris
+- `moon_080317.tf` — Moon frame kernel
+- `pck00008.tpc` — Planetary physical constants
+- `moon_pa_de421_1900-2050.bpc` — Moon orientation data
+
+#### 4.2 South Pole DEM Data (Optional)
+
+Real lunar DEM data from NASA LOLA (5 meter-per-pixel) for background landscape terrain.
+Only required when using environments with `landscape` enabled.
+
+```bash
+# Step 1: Download DEM tiles (~27 files, may take a while)
+./scripts/get_dems.sh
+
+# Step 2: Convert TIF to NPY and install to assets/Terrains/SouthPole/
+./scripts/extract_dems.sh
+```
+
+> **Note:** Step 2 requires GDAL (`gdalinfo` CLI and Python `osgeo` package).
+> Install with: `sudo apt install gdal-bin python3-gdal`
+
+#### 4.3 Asset Directory Structure
+
+After downloading, the `assets/` directory should look like:
 
 ```
 assets/
-├── Terrains/           # Crater profiles, DEM data
-├── USD_Assets/         # Robot and rock USD models
-├── Textures/           # Earth texture, etc.
-└── Ephemeris/          # JPL DE421 ephemeris data (de421.bsp)
+├── Ephemeris/              # JPL ephemeris data (Step 4.1)
+│   ├── de421.bsp
+│   ├── moon_080317.tf
+│   ├── pck00008.tpc
+│   └── moon_pa_de421_1900-2050.bpc
+├── Terrains/
+│   ├── SouthPole/          # LOLA DEM data (Step 4.2, optional)
+│   ├── Lunaryard/          # Generated at runtime
+│   └── crater_spline_profiles.pkl
+├── USD_Assets/             # Robot and rock USD models
+│   ├── robots/
+│   └── rocks/
+└── Textures/               # Material textures (MDL shaders, Earth texture)
 ```
 
 ## Usage

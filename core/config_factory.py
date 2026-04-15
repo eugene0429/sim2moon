@@ -118,11 +118,11 @@ def create_config_factory() -> ConfigFactory:
     from objects.config import RockManagerConf
     from rendering.config import RenderingConf
     from environments.lunar_yard_config import LunarYardConf
+    from robots.config import RobotManagerConf
 
     factory = ConfigFactory()
     # Core configs
     factory.register("physics_scene", PhysicsConf)
-    factory.register("renderer", RendererConf)
     # Terrain configs
     factory.register("terrain_manager", TerrainManagerConf)
     factory.register("moon_yard", MoonYardConf)
@@ -136,6 +136,8 @@ def create_config_factory() -> ConfigFactory:
     factory.register("rendering", RenderingConf)
     # Environment configs
     factory.register("lunaryard_settings", LunarYardConf)
+    # Robot configs
+    factory.register("robots_settings", RobotManagerConf)
     return factory
 
 

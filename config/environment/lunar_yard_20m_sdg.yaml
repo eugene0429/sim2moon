@@ -1,0 +1,103 @@
+# @package _global_
+name: LunarYard
+seed: 42
+mode: SDG
+
+lunaryard_settings:
+  lab_length: 20.0
+  lab_width: 20.0
+  resolution: 0.025
+  root_path: /LunarYard
+  coordinates:
+    latitude: 46.8
+    longitude: -26.3
+
+terrain_manager:
+  sim_length: 20.0
+  sim_width: 20.0
+  resolution: 0.025
+  root_path: /LunarYard
+  texture_path: /LunarYard/Looks/Basalt
+  dems_path: Terrains/Lunaryard
+  moon_yard:
+    is_yard: false
+    is_lab: true
+    crater_generator:
+      profiles_path: assets/Terrains/crater_spline_profiles.pkl
+      z_scale: 1.0
+      seed: 42
+    crater_distribution:
+      densities: [0.025, 0.05, 0.5]
+      radius: [[1.5, 2.5], [0.75, 1.5], [0.25, 0.5]]
+      num_repeat: 0
+      seed: 42
+    base_terrain_generator:
+      resolution: 0.025
+      max_elevation: 0.5
+      min_elevation: -0.5
+      z_scale: 1.0
+      seed: 42
+    deformation_engine:
+      enable: false
+
+sun_settings:
+  intensity: 1750.0
+  angle: 0.53
+  color: [1.0, 1.0, 1.0]
+  temperature: 6500.0
+  azimuth: 180.0
+  elevation: 45.0
+
+earth_settings:
+  texture_path: assets/Textures/Earth/earth_color_with_clouds.tif
+  scale: 50.0
+  enable: true
+
+rocks_settings:
+  enable: true
+  instancers_path: /LunarYard/Rocks
+  assets_root: assets/USD_Assets/rocks
+  rocks_settings:
+    medium_rocks:
+      seed: 42
+      collections: ["apollo_rocks"]
+      use_point_instancer: false
+      semantic_class: rock
+      realistic_distribution:
+        method: clustered_scatter
+        resolution: 0.025
+        lambda_parent: 0.1
+        lambda_daughter: 200
+        sigma: 0.2
+        d_min: 0.3
+        d_max: 0.3
+        alpha: 2.5
+        density: 0.5
+    large_rocks:
+      seed: 42
+      collections: ["apollo_rocks"]
+      use_point_instancer: false
+      semantic_class: rock
+      realistic_distribution:
+        method: clustered_scatter
+        resolution: 0.025
+        lambda_parent: 0.25
+        lambda_daughter: 5
+        sigma: 0.05
+        d_min: 0.6
+        d_max: 1.5
+        alpha: 2.2
+        density: 0.3
+    small_rocks:
+      seed: 42
+      collections: ["apollo_rocks"]
+      realistic_distribution:
+        method: clustered_scatter
+        resolution: 0.025
+        lambda_parent: 0.25
+        lambda_daughter: 500
+        sigma: 0.3
+        d_min: 0.03
+        d_max: 0.15
+        alpha: 3.0
+        density: 2.0

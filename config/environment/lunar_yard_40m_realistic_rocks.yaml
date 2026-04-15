@@ -20,7 +20,7 @@ terrain_manager:
   sim_width: 40.0
   resolution: 0.02
   root_path: /LunarYard
-  texture_path: /LunarYard/Looks/LunarRegolith8k
+  texture_path: /LunarYard/Looks/Basalt
   dems_path: Terrains/Lunaryard
   moon_yard:
     is_yard: false
@@ -28,7 +28,7 @@ terrain_manager:
     crater_generator:
       crater_mode: "realistic"
       profiles_path: assets/Terrains/crater_spline_profiles.pkl
-      z_scale: 0.2
+      z_scale: 0.8
       seed: 42
     realistic_crater:
       n_harmonics: 4
@@ -39,14 +39,10 @@ terrain_manager:
       slump_intensity: 0.02
       floor_noise_amp: 0.01
     crater_distribution:
-      x_size: 40.0
-      y_size: 40.0
       densities: [0.01, 0.02, 0.03]
       radius: [[1.5, 2.5], [0.75, 1.5], [0.25, 0.5]]
       seed: 42
     base_terrain_generator:
-      x_size: 40.0
-      y_size: 40.0
       resolution: 0.02
       max_elevation: 0.5
       min_elevation: -0.5
@@ -54,9 +50,39 @@ terrain_manager:
       seed: 42
     deformation_engine:
       enable: false
-      terrain_resolution: 0.02
-      terrain_width: 40.0
-      terrain_height: 40.0
+
+# Bekker-Janosi terramechanics for wheel-terrain interaction.
+# When disabled, only PhysX rigid-body friction is used.
+terramechanics_settings:
+  enable: false
+  contact_force_ema: 0.7  # EMA smoothing for PhysX contact forces (0=raw, 0.7=smooth)
+  robot:
+    mass: 50.0            # rover total mass (kg)
+    num_wheels: 4
+    wheel_radius: 0.165   # Husky wheel radius (m)
+    wheel_width: 0.1      # wheel contact patch width (m)
+    wheel_lug_height: 0.01  # grouser height protruding from wheel surface (m)
+    wheel_lug_count: 16     # number of grousers around wheel circumference
+  soil:
+    # Bekker pressure-sinkage parameters (lunar regolith defaults)
+    k_c: 1400.0           # cohesive modulus (N/m^(n+1))
+    k_phi: 820000.0       # frictional modulus (N/m^(n+2))
+    n: 1.0                # sinkage exponent
+    # Mohr-Coulomb shear strength
+    c: 170.0              # cohesion (Pa) — lower = more slippery
+    phi_deg: 35.0         # friction angle (degrees) — lower = more slippery
+    K: 0.018              # shear deformation modulus (m) — higher = more slippery
+    # Other
+    rho: 1500.0           # bulk density (kg/m^3)
+    gravity: 1.625        # surface gravity (m/s^2)
+    slip_sinkage_coeff: 0.5  # slip-sinkage coupling (0=off, 0.5=moderate)
+    # Soil heterogeneity (non-uniform terrain)
+    heterogeneity: 0.0    # variation intensity (0=uniform, 0.5~0.8=realistic)
+    heterogeneity_scale: 2.0  # patch size in meters
+    heterogeneity_seed: 42
+
+starfield_settings:
+  enable: true
 
 stellar_engine_settings:
   start_date:
@@ -160,3 +186,11 @@ robots_settings:
       domain_id: 0
       target_links: ["front_left_wheel_link", "front_right_wheel_link", "rear_left_wheel_link", "rear_right_wheel_link"]
       base_link: "base_link"
+      wheel_joints:
+        left: ["front_left_wheel_joint", "rear_left_wheel_joint"]
+        right: ["front_right_wheel_joint", "rear_right_wheel_joint"]
+
+udp_bridge:
+  enable: true
+  target_ip: "172.18.0.8"
+  target_port: 7777

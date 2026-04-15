@@ -1,0 +1,278 @@
+# @package _global_
+name: LunarYard
+seed: 42
+physics_dt: 0.0333
+rendering_dt: 0.0333
+enforce_realtime: true
+mode: ROS2
+
+lunaryard_settings:
+  lab_length: 200.0
+  lab_width: 200.0
+  resolution: 0.10
+  root_path: /LunarYard
+  coordinates:
+    latitude: -84.8
+    longitude: 29.2
+
+terrain_manager:
+  sim_length: 200.0
+  sim_width: 200.0
+  resolution: 0.10
+  root_path: /LunarYard
+  texture_path: /LunarYard/Looks/LunarRegolith8k_antiTile
+  dems_path: Terrains/Lunaryard
+  mesh_position: [0, 0, 4.0]
+  mesh_orientation: [0, 0, 0, 1]
+  mesh_scale: [1, 1, 1]
+  moon_yard:
+    is_yard: true
+    is_lab: false
+    crater_generator:
+      crater_mode: "realistic"
+      profiles_path: assets/Terrains/crater_spline_profiles.pkl
+      min_xy_ratio: 0.85
+      max_xy_ratio: 1.0
+      resolution: 0.10
+      pad_size: 500
+      random_rotation: true
+      z_scale: 0.6
+      seed: 42
+    realistic_crater:
+      n_harmonics: 4
+      harmonic_amp: 0.08
+      contour_noise_amp: 0.02
+      rim_n_harmonics: 3
+      rim_noise_amp: 0.05
+      slump_intensity: 0.02
+      floor_noise_amp: 0.01
+    crater_distribution:
+      densities: [0.00025, 0.001, 0.001]
+      radius: [[8.0, 15.0], [4.0, 7.0], [0.5, 1.0]]
+      num_repeat: 0
+      seed: 124
+    base_terrain_generator:
+      resolution: 0.02
+      max_elevation: 0.8
+      min_elevation: -0.8
+      z_scale: 0.8
+      seed: 42
+    deformation_engine:
+      enable: false
+      delay: 2.0
+      footprint:
+        width: 0.25
+        height: 0.2
+      deform_constrain:
+        x_deform_offset: 0.0
+        y_deform_offset: 0.0
+        deform_decay_ratio: 0.01
+      boundary_distribution:
+        distribution: trapezoidal
+        angle_of_repose: 1.047
+      depth_distribution:
+        distribution: sinusoidal
+        wave_frequency: 4.14
+      force_depth_regression:
+        amplitude_slope: 0.00006
+        amplitude_intercept: 0.008
+        mean_slope: -0.00046
+        mean_intercept: -0.0013
+
+# Bekker-Janosi terramechanics for wheel-terrain interaction.
+# When disabled, only PhysX rigid-body friction is used.
+terramechanics_settings:
+  enable: false
+  contact_force_ema: 0.7  # EMA smoothing for PhysX contact forces (0=raw, 0.7=smooth)
+  robot:
+    mass: 20.0            # rover total mass (kg)
+    num_wheels: 6
+    wheel_radius: 0.09    # Pragyaan wheel radius (m)
+    wheel_width: 0.1      # wheel contact patch width (m)
+    wheel_lug_height: 0.02  # grouser height protruding from wheel surface (m)
+    wheel_lug_count: 12     # number of grousers around wheel circumference
+  soil:
+    # Bekker pressure-sinkage parameters (lunar regolith defaults)
+    k_c: 1400.0           # cohesive modulus (N/m^(n+1))
+    k_phi: 820000.0       # frictional modulus (N/m^(n+2))
+    n: 1.0                # sinkage exponent
+    # Mohr-Coulomb shear strength
+    c: 170.0              # cohesion (Pa) — lower = more slippery
+    phi_deg: 35.0         # friction angle (degrees) — lower = more slippery
+    K: 0.018              # shear deformation modulus (m) — higher = more slippery
+    # Other
+    rho: 1500.0           # bulk density (kg/m^3)
+    gravity: 1.625        # surface gravity (m/s^2)
+    slip_sinkage_coeff: 0.5  # slip-sinkage coupling (0=off, 0.5=moderate)
+    # Soil heterogeneity (non-uniform terrain)
+    heterogeneity: 0.0    # variation intensity (0=uniform, 0.5~0.8=realistic)
+    heterogeneity_scale: 2.0  # patch size in meters
+    heterogeneity_seed: 42
+
+landscape_settings:
+  enable: false
+  dem_path: Terrains/SouthPole/Site01_final_adj_5mpp_surf
+  crop_size: 1000.0
+  target_resolution: 10.0
+  hole_margin: 1.0
+  max_slope: 3.0
+  texture_path: /LunarYard/Looks/LunarRegolith8k_antiTile
+  mesh_prim_path: /LunarYard/Landscape
+
+starfield_settings:
+  enable: true
+
+stellar_engine_settings:
+  start_date:
+    year: 2025
+    month: 3
+    day: 7
+    hour: 1
+    minute: 1
+  time_scale: 1
+  update_interval: 600
+  ephemeris_path: assets/Ephemeris
+
+sun_settings:
+  intensity: 1750.0
+  angle: 0.53
+  diffuse_multiplier: 1.0
+  specular_multiplier: 1.0
+  color: [1.0, 1.0, 1.0]
+  temperature: 6500.0
+  azimuth: 180.0
+  elevation: 45.0
+
+earth_settings:
+  texture_path: assets/Textures/Earth/earth_color_with_clouds.tif
+  scale: 50.0
+  enable: true
+
+# Realistic rock distribution: crater rim ejecta + power-law sizes + overlap prevention
+rocks_settings:
+  enable: true
+  instancers_path: /LunarYard/Rocks
+  assets_root: assets/USD_Assets/rocks
+  rocks_settings:
+    crater_ejecta:
+      seed: 42
+      collections: ["apollo_rocks"]
+      realistic_distribution:
+        method: crater_ejecta
+        resolution: 0.02
+        min_gap: 0.05
+        min_crater_radius: 3
+        rocks_per_crater: 5
+        rim_inner_ratio: 0.8
+        rim_outer_ratio: 2.5
+        decay_power: 2.0
+        d_min: 8.0
+        d_max: 20.0
+        alpha: 2.2
+
+    crater_wall_debris:
+      seed: 42
+      collections: ["apollo_rocks"]
+      realistic_distribution:
+        method: crater_wall_debris
+        resolution: 0.02
+        min_gap: 0.03
+        min_crater_radius: 1.5
+        rocks_per_crater: 10
+        inner_radius_ratio: 0.1
+        outer_radius_ratio: 0.9
+        wall_bias: 2.0
+        d_min: 3.0
+        d_max: 7.0
+        alpha: 2.5
+
+    background_medium:
+      seed: 42
+      collections: ["apollo_rocks"]
+      realistic_distribution:
+        method: clustered_scatter
+        resolution: 0.00
+        min_gap: 0.03
+        lambda_parent: 0.003
+        lambda_daughter: 2
+        sigma: 10.0
+        d_min: 4.0
+        d_max: 8.0
+        alpha: 2.8
+
+    background_small:
+      seed: 42
+      collections: ["apollo_rocks"]
+      realistic_distribution:
+        method: background_scatter
+        resolution: 0.00
+        min_gap: 0.01
+        density: 0.003
+        d_min: 0.2
+        d_max: 1.0
+        alpha: 3.0
+
+robots_settings:
+  uses_nucleus: false
+  max_robots: 5
+  robots_root: "/Robots"
+  parameters:
+   -
+      robot_name: husky
+      usd_path: assets/USD_Assets/robots/ros2_husky_all.usd         
+      # usd_path: assets/USD_Assets/robots/ros2_jackal_PhysX_vlp16_stereo.usd 
+      pose:
+        position: [15, 55, 4.5]
+        orientation: [1, 0, 0, 0]
+      domain_id: 0
+      target_links: ["front_left_wheel_link", "front_right_wheel_link", "rear_left_wheel_link", "rear_right_wheel_link"]
+      base_link: "base_link" # core link used to determine the position of the robot
+
+static_assets_settings:
+  root_path: "/StaticAssets"
+  parameters:
+    # - asset_name: lander
+    #   usd_path: USD_Assets/common/lander/Vikram/Vikram.usd
+    #   pose:
+    #     position: [25.7, 25.6, 0.2]
+    #     orientation: [0.5, 0.5, 0.5, 0.5]
+    #   collision: true
+
+    # - asset_name: background_landscape
+    #   usd_path: Terrains/landscape_cropped/landscape_cropped.usd
+    #   crop_scale:
+    #   terrain_relative: false
+    #   pose:
+    #     position: [-20405.6, -9502.6, 561.8]
+    #     orientation: [0, 0, 0, 1]
+    #   collision: false
+    #   material_override: /LunarYard/Looks/LunarRegolith8k_antiTile
+    #   transition_strip:
+    #     enabled: true
+    #     band_width: 10.0
+    #     n_subdivisions: 8
+
+monitoring_cameras:
+  root_path: "/MonitoringCameras"
+  camera_definitions:
+    - name: "monitoring_camera"
+      pose:
+        position: [32.0, 22.0, 25.0]
+        orientation: [0.082948, 0.091931, 0.700333, 0.702995]
+      camera_params:
+        focal_length: 1.93
+        horizontal_aperture: 2.4
+        vertical_aperture: 1.8
+        fstop: 5.0
+        focus_distance: 10.0
+        clipping_range: [0.01, 1000000.0]
+      sensor_type: "Rgb"
+      resolution: [320, 240]
+      ros2:
+        topic: "/monitoring/monitoring_camera"
+        frame_id: "monitoring_camera_id"
+
+udp_bridge:
+  enable: true
+  target_ip: "127.0.0.1" #"172.18.0.8"
+  target_port: 7777

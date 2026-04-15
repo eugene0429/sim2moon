@@ -1,3 +1,4 @@
+# @package _global_
 name: LunarYard
 seed: 42
 physics_dt: 0.0333
@@ -28,14 +29,10 @@ terrain_manager:
       z_scale: 0.2
       seed: 42
     crater_distribution:
-      x_size: 40.0
-      y_size: 40.0
       densities: [0.025, 0.05, 0.5]
       radius: [[1.5, 2.5], [0.75, 1.5], [0.25, 0.5]]
       seed: 42
     base_terrain_generator:
-      x_size: 40.0
-      y_size: 40.0
       resolution: 0.02
       max_elevation: 0.5
       min_elevation: -0.5
@@ -43,9 +40,9 @@ terrain_manager:
       seed: 42
     deformation_engine:
       enable: false
-      terrain_resolution: 0.02
-      terrain_width: 40.0
-      terrain_height: 40.0
+
+starfield_settings:
+  enable: true
 
 stellar_engine_settings:
   start_date:

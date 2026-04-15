@@ -1,0 +1,6 @@
+name: ROS2
+ROS_DOMAIN_ID: 0
+bridge_name: humble
+publish_gt_tf: true
+physics_dt: 0.0333
+rendering_dt: 0.0333

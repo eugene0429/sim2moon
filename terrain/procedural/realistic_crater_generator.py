@@ -120,52 +120,71 @@ class RealisticCraterGenerator(CraterGenerator):
         return t * t * (3 - 2 * t)
 
     def _apply_profile(self, distance: np.ndarray, cd: CraterData) -> np.ndarray:
-        """Apply profile with rim modulation, wall slumps, and floor noise."""
+        """Apply profile with additive positive noise at the shoulder only.
+
+        Adds positive-only height perturbation around the shoulder region.
+        Beyond the shoulder (rim and outer edge) the base profile is preserved.
+        """
         if not isinstance(cd, RealisticCraterData):
             return super()._apply_profile(distance, cd)
 
         rc = self._rcfg
         n = cd.size
+        profile_fn = self._profiles[cd.crater_profile_id]
 
-        # Base profile — crater shape preserved exactly
+        # --- Base profile (untouched) ---
         r_norm = 2 * distance / n  # 0 at center, ~1 at edge
-        base = self._profiles[cd.crater_profile_id](r_norm)
+        base = profile_fn(np.clip(r_norm, 0, 1))
 
-        # Find the outer shoulder: where the steep wall flattens out toward
-        # the rim crest. Detected as where slope drops to 30% of its peak
-        # on the outer side of the wall.
+        # --- Find shoulder: slope-break on outer wall ---
         r_1d = np.linspace(0.05, 0.95, 200)
-        profile_1d = self._profiles[cd.crater_profile_id](r_1d)
+        profile_1d = profile_fn(r_1d)
         slope_1d = np.abs(np.gradient(profile_1d, r_1d))
         peak_idx = np.argmax(slope_1d)
         threshold = slope_1d[peak_idx] * 0.3
         outer_offset = np.argmax(slope_1d[peak_idx:] < threshold)
         shoulder_r = r_1d[peak_idx + outer_offset]
 
-        # Shift the shoulder position per-angle instead of adding noise to a band.
-        # This makes the shoulder LINE itself irregular — no band width concept.
+        # --- Azimuthal noise (always positive) ---
         x_lin, y_lin = np.meshgrid(np.linspace(-1, 1, n), np.linspace(-1, 1, n))
         theta = np.arctan2(y_lin, x_lin)
 
-        # Azimuthal offset: harmonics (broad) + fBm Perlin (natural detail)
-        radial_offset = np.zeros_like(theta)
+        noise = np.zeros_like(theta)
         for i, harm_n in enumerate(range(2, 2 + rc.rim_n_harmonics)):
-            radial_offset += cd.rim_amplitudes[i] * np.cos(
+            noise += cd.rim_amplitudes[i] * np.cos(
                 harm_n * theta + cd.rim_phases[i]
             )
-        theta_shifted = theta + np.pi
+        # fBm Perlin for natural detail
         amp = rc.rim_noise_amp * 0.5
         for octave in range(3):
             freq = 2.0 * (2 ** octave)
-            radial_offset += amp * perlin_1d(
-                theta_shifted.ravel(), freq=freq,
+            noise += amp * perlin_1d(
+                (theta + np.pi).ravel(), freq=freq,
                 period=2 * np.pi,
                 seed=cd.contour_noise_seed + octave,
             ).reshape(theta.shape)
             amp *= 0.5
 
-        # Add height perturbation at the shoulder line only (~2 pixels wide)
-        pixel_size = 2.0 / n
-        thin_mask = np.exp(-0.5 * ((r_norm - shoulder_r) / pixel_size) ** 2)
+        # Only positive perturbation (material accumulation at shoulder)
+        noise = np.abs(noise)
 
-        return base + radial_offset * thin_mask
+        # --- Smooth height blending around shoulder ---
+        # At the shoulder, full noise is added. Away from the shoulder,
+        # the HEIGHT DIFFERENCE between (base + noise) and base is smoothly
+        # reduced to zero — not the noise pattern itself.
+        # This avoids radial grooves extending into the crater interior.
+
+        # Compute per-azimuth noise value at exactly the shoulder radius.
+        # This is a 1D value per angle (no radial structure).
+        shoulder_noise = noise  # noise is already azimuth-only (no r dependence)
+
+        # Blend factor: 1 at shoulder, 0 far away (both sides)
+        falloff_inner = 0.01
+        falloff_outer = 0.03
+        blend = np.exp(-0.5 * np.where(
+            r_norm <= shoulder_r,
+            ((r_norm - shoulder_r) / falloff_inner) ** 2,
+            ((r_norm - shoulder_r) / falloff_outer) ** 2,
+        ))
+
+        return base + shoulder_noise * blend

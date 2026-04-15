@@ -312,6 +312,17 @@ class LunarYardEnvironment(BaseEnvironment):
             from objects.rock_manager import RockManager
 
             self._rock_manager = RockManager(rocks_cfg)
+            # Pass terrain geometry info for correct world-space placement
+            tm_cfg = self._cfg.get("terrain_manager", {})
+            rock_mesh_pos = (
+                tm_cfg.get("mesh_position", [0, 0, 0]) if isinstance(tm_cfg, dict)
+                else getattr(tm_cfg, "mesh_position", (0, 0, 0))
+            )
+            terrain_res = (
+                tm_cfg.get("resolution", 0.02) if isinstance(tm_cfg, dict)
+                else getattr(tm_cfg, "resolution", 0.02)
+            )
+            self._rock_manager.set_terrain_info(rock_mesh_pos, terrain_res)
             # Get DEM and mask from terrain
             dem = self._terrain_manager.get_dem() if self._terrain_manager else None
             mask = self._terrain_manager.get_mask() if self._terrain_manager else None
@@ -424,8 +435,16 @@ class LunarYardEnvironment(BaseEnvironment):
         root_path = cfg.get("root_path", "/StaticAssets") if isinstance(cfg, dict) else "/StaticAssets"
         self._stage.DefinePrim(root_path, "Xform")
 
-        parameters = cfg.get("parameters", []) if isinstance(cfg, dict) else []
+        parameters = (cfg.get("parameters") or []) if isinstance(cfg, dict) else []
         assets_root = get_assets_path()
+
+        # Get terrain mesh_position offset for auto-offsetting static assets
+        tm_cfg = self._cfg.get("terrain_manager", {})
+        mesh_position = (
+            tm_cfg.get("mesh_position", [0.0, 0.0, 0.0])
+            if isinstance(tm_cfg, dict)
+            else list(getattr(tm_cfg, "mesh_position", [0.0, 0.0, 0.0]))
+        )
 
         for asset in parameters:
             name = asset["asset_name"]
@@ -442,6 +461,14 @@ class LunarYardEnvironment(BaseEnvironment):
             pose = asset.get("pose", {})
             pos = list(pose.get("position", [0, 0, 0]))
             orient = pose.get("orientation", [0, 0, 0, 1])
+
+            # Apply terrain mesh_position offset to terrain-relative assets.
+            # Assets with terrain_relative: false (e.g. background landscape)
+            # use absolute world coordinates and skip the offset.
+            if asset.get("terrain_relative", True):
+                pos[0] += float(mesh_position[0])
+                pos[1] += float(mesh_position[1])
+                pos[2] += float(mesh_position[2])
 
             crop_scale = asset.get("crop_scale")
             if crop_scale is not None and raw_usd_path != asset["usd_path"]:

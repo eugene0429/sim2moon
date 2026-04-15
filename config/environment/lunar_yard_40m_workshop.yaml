@@ -1,0 +1,159 @@
+# @package _global_
+name: LunarYard
+seed: 42
+physics_dt: 0.0333
+rendering_dt: 0.0333
+enforce_realtime: true
+mode: ROS2
+
+lunaryard_settings:
+  lab_length: 40.0
+  lab_width: 40.0
+  resolution: 0.02
+  root_path: /LunarYard
+  coordinates:
+    latitude: -84.8
+    longitude: 29.2
+
+terrain_manager:
+  sim_length: 40.0
+  sim_width: 40.0
+  resolution: 0.02
+  root_path: /LunarYard
+  texture_path: /LunarYard/Looks/LunarRegolith8k
+  dems_path: Terrains/Lunaryard
+  moon_yard:
+    is_yard: false
+    is_lab: true
+    crater_generator:
+      profiles_path: assets/Terrains/crater_spline_profiles.pkl
+      z_scale: 0.2
+      seed: 42
+    crater_distribution:
+      densities: [0.025, 0.05, 0.5]
+      radius: [[1.5, 2.5], [0.75, 1.5], [0.25, 0.5]]
+      seed: 42
+    base_terrain_generator:
+      resolution: 0.02
+      max_elevation: 0.5
+      min_elevation: -0.5
+      z_scale: 0.8
+      seed: 42
+    deformation_engine:
+      enable: false
+
+# Bekker-Janosi terramechanics for wheel-terrain interaction.
+# When disabled, only PhysX rigid-body friction is used.
+terramechanics_settings:
+  enable: false
+  contact_force_ema: 0.7  # EMA smoothing for PhysX contact forces (0=raw, 0.7=smooth)
+  robot:
+    mass: 20.0            # rover total mass (kg)
+    num_wheels: 6
+    wheel_radius: 0.09    # Pragyaan wheel radius (m)
+    wheel_width: 0.1      # wheel contact patch width (m)
+    wheel_lug_height: 0.02  # grouser height protruding from wheel surface (m)
+    wheel_lug_count: 12     # number of grousers around wheel circumference
+  soil:
+    # Bekker pressure-sinkage parameters (lunar regolith defaults)
+    k_c: 1400.0           # cohesive modulus (N/m^(n+1))
+    k_phi: 820000.0       # frictional modulus (N/m^(n+2))
+    n: 1.0                # sinkage exponent
+    # Mohr-Coulomb shear strength
+    c: 170.0              # cohesion (Pa) — lower = more slippery
+    phi_deg: 35.0         # friction angle (degrees) — lower = more slippery
+    K: 0.018              # shear deformation modulus (m) — higher = more slippery
+    # Other
+    rho: 1500.0           # bulk density (kg/m^3)
+    gravity: 1.625        # surface gravity (m/s^2)
+    slip_sinkage_coeff: 0.5  # slip-sinkage coupling (0=off, 0.5=moderate)
+    # Soil heterogeneity (non-uniform terrain)
+    heterogeneity: 0.0    # variation intensity (0=uniform, 0.5~0.8=realistic)
+    heterogeneity_scale: 2.0  # patch size in meters
+    heterogeneity_seed: 42
+
+starfield_settings:
+  enable: true
+
+stellar_engine_settings:
+  start_date:
+    year: 2025
+    month: 3
+    day: 7
+    hour: 1
+    minute: 1
+  time_scale: 1
+  update_interval: 600
+  ephemeris_path: assets/Ephemeris
+
+sun_settings:
+  intensity: 1750.0
+  angle: 0.53
+  color: [1.0, 1.0, 1.0]
+  temperature: 6500.0
+  azimuth: 180.0
+  elevation: 45.0
+
+earth_settings:
+  texture_path: assets/Textures/Earth/earth_color_with_clouds.tif
+  scale: 50.0
+  enable: true
+
+rocks_settings:
+  enable: false
+  instancers_path: /LunarYard/Rocks
+  assets_root: assets/USD_Assets/rocks
+  rocks_settings:
+    large_rocks:
+      seed: 42
+      collections: ["lunar_rocks/rocks_s2_r256"]
+      realistic_distribution:
+        method: background_scatter
+        d_min: 0.5
+        d_max: 2.0
+        alpha: 2.2
+        density: 0.3
+    small_rocks:
+      seed: 42
+      collections: ["lunar_rocks/rocks_s2_r128"]
+      realistic_distribution:
+        method: background_scatter
+        d_min: 0.1
+        d_max: 0.5
+        alpha: 2.5
+        density: 1.0
+
+robots_settings:
+  uses_nucleus: false
+  max_robots: 5
+  robots_root: "/Robots"
+  parameters:
+    - robot_name: pragyaan
+      usd_path: assets/USD_Assets/robots/pragyaan/nograph_pragyaan.usd
+      pose:
+        position: [26.0, 16.6, 0.8]
+        orientation: [0.0, 0.0, 0.70711, 0.70711]
+      domain_id: 0
+      target_links:
+        - "Mobility/Wheel_front_left"
+        - "Mobility/Wheel_front_right"
+        - "Mobility/Wheel_middle_left"
+        - "Mobility/Wheel_middle_right"
+        - "Mobility/Wheel_back_left"
+        - "Mobility/Wheel_back_right"
+      base_link: "base_link"
+      dimensions:
+        width: 1.6
+        length: 1.5
+      pos_relative_to_prim: "/StaticAssets/lander"
+      wheel_joints:
+        left: ["wheel_fl", "wheel_ml", "wheel_bl"]
+        right: ["wheel_fr", "wheel_mr", "wheel_br"]
+      camera:
+        prim_path: "/Robots/pragyaan/Body/body_main/depth_cam"
+        resolutions:
+          low: [320, 240]
+          high: [1440, 1080]
+      imu_sensor_path: "/Robots/pragyaan/base_link/Imu_Sensor"
+      turn_speed_coef: 19
+      solar_panel_joint: "solarJoint"

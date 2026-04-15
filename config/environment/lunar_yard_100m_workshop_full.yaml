@@ -7,18 +7,18 @@ enforce_realtime: true
 mode: ROS2
 
 lunaryard_settings:
-  lab_length: 40.0
-  lab_width: 40.0
-  resolution: 0.02
+  lab_length: 100.0
+  lab_width: 100.0
+  resolution: 0.05
   root_path: /LunarYard
   coordinates:
     latitude: -84.8
     longitude: 29.2
 
 terrain_manager:
-  sim_length: 40.0
-  sim_width: 40.0
-  resolution: 0.02
+  sim_length: 100.0
+  sim_width: 100.0
+  resolution: 0.05
   root_path: /LunarYard
   texture_path: /LunarYard/Looks/LunarRegolith8k_antiTile
   dems_path: Terrains/Lunaryard
@@ -47,12 +47,12 @@ terrain_manager:
       slump_intensity: 0.02
       floor_noise_amp: 0.01
     crater_distribution:
-      densities: [0.005, 0.01, 0.02]
-      radius: [[3.5, 4.5], [1.75, 2.5], [0.5, 1.0]]
+      densities: [0.01, 0.02, 0.03]
+      radius: [[1.5, 3.5], [0.75, 1.5], [0.25, 0.5]]
       num_repeat: 0
       seed: 42
     base_terrain_generator:
-      resolution: 0.02
+      resolution: 0.05
       max_elevation: 0.5
       min_elevation: -0.5
       z_scale: 0.8
@@ -120,7 +120,7 @@ landscape_settings:
   mesh_prim_path: /LunarYard/Landscape
 
 starfield_settings:
-  enable: false
+  enable: true
 
 stellar_engine_settings:
   start_date:
@@ -257,18 +257,13 @@ static_assets_settings:
         orientation: [0.5, 0.5, 0.5, 0.5]
       collision: true
 
-    - asset_name: background_landscape
-      usd_path: Terrains/landscape_cropped/landscape_cropped.usd
-      crop_scale: 5
-      pose:
-        position: [-20405.6, -9502.6, 561.8]
-        orientation: [0, 0, 0, 1]
-      collision: false
-      material_override: /LunarYard/Looks/LunarRegolith8k_antiTile
-      transition_strip:
-        enabled: true
-        band_width: 10.0
-        n_subdivisions: 8
+    # - asset_name: background_landscape
+    #   usd_path: Terrains/landscape_cropped/landscape_cropped.usd
+    #   pose:
+    #     position: [-20405.6, -9502.6, 561.8]
+    #     orientation: [0, 0, 0, 1]
+    #   collision: false
+    #   material_override: /LunarYard/Looks/LunarRegolith8k_antiTile
 
 monitoring_cameras:
   root_path: "/MonitoringCameras"

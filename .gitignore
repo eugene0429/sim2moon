@@ -7,7 +7,13 @@ build/
 .pytest_cache/
 outputs/
 .hydra/
+tmp/
 
-# Pre-cropped landscape USD variants (generated offline, not committed)
-assets/Terrains/landscape_cropped/landscape_cropped_*x.usd
-assets/Terrains/landscape_cropped/landscape_cropped_*x_meta.json
+# Assets (downloaded via scripts)
+assets/
+
+# Claude Code / Superpowers development metadata
+.claude/
+.mcp.json
+.superpowers/
+docs/superpowers/

@@ -1,0 +1,228 @@
+# @package _global_
+#
+# 40m lunar yard with configurable terrain tilt for terramechanics testing.
+#
+#   tilt_angle:     slope angle in degrees from horizontal (0 = flat)
+#   tilt_direction: compass bearing in degrees (0 = +Y, 90 = +X, 180 = -Y, 270 = -X)
+#
+# Example: tilt_angle 15 with tilt_direction 0 makes the terrain rise
+# toward +Y and fall toward -Y (15-degree uphill when driving in +Y).
+
+name: LunarYard
+seed: 42
+physics_dt: 0.0166
+rendering_dt: 0.0333
+enforce_realtime: true
+mode: ROS2
+
+lunaryard_settings:
+  lab_length: 20.0
+  lab_width: 20.0
+  resolution: 0.05
+  root_path: /LunarYard
+  coordinates:
+    latitude: 46.8
+    longitude: -26.3
+
+terrain_manager:
+  sim_length: 20.0
+  sim_width: 20.0
+  resolution: 0.05
+  root_path: /LunarYard
+  texture_path: /LunarYard/Looks/Basalt
+  dems_path: Terrains/Lunaryard
+  tilt_angle: 25
+  tilt_direction: 180
+  moon_yard:
+    is_yard: false
+    is_lab: true
+    crater_generator:
+      crater_mode: "realistic"
+      profiles_path: assets/Terrains/crater_spline_profiles.pkl
+      min_xy_ratio: 0.85
+      max_xy_ratio: 1.0
+      resolution: 0.02
+      pad_size: 500
+      random_rotation: true
+      z_scale: 2.0
+      seed: 42
+    realistic_crater:
+      n_harmonics: 4
+      harmonic_amp: 0.08
+      contour_noise_amp: 0.02
+      rim_n_harmonics: 3
+      rim_noise_amp: 0.00
+      slump_intensity: 0.02
+      floor_noise_amp: 0.01
+    crater_distribution:
+      densities: [0.00, 0.00, 0.0]
+      radius: [[5.0, 7.0], [0.75, 1.5], [0.25, 0.5]]
+      num_repeat: 0
+      seed: 42
+    base_terrain_generator:
+      resolution: 0.05
+      max_elevation: 0.2
+      min_elevation: -0.2
+      z_scale: 0.3
+      seed: 29
+    deformation_engine:
+      enable: false
+      delay: 2.0
+      footprint:
+        width: 0.25
+        height: 0.2
+      deform_constrain:
+        x_deform_offset: 0.0
+        y_deform_offset: 0.0
+        deform_decay_ratio: 0.01
+      boundary_distribution:
+        distribution: trapezoidal
+        angle_of_repose: 1.047
+      depth_distribution:
+        distribution: sinusoidal
+        wave_frequency: 4.14
+      force_depth_regression:
+        amplitude_slope: 0.00006
+        amplitude_intercept: 0.008
+        mean_slope: -0.00046
+        mean_intercept: -0.0013
+
+# Bekker-Janosi terramechanics for wheel-terrain interaction.
+# When disabled, only PhysX rigid-body friction is used.
+terramechanics_settings:
+  enable: true
+  contact_force_ema: 0.7  # EMA smoothing for PhysX contact forces (0=raw, 0.7=smooth)
+  # Robots listed here use PhysX friction only (no Bekker-Janosi).
+  # Useful for side-by-side comparison with terramechanics-enabled rovers.
+  skip_robots: ["husky_physx"]
+  robot:
+    mass: 50.0            # rover total mass (kg)
+    num_wheels: 4
+    wheel_radius: 0.165   # Husky wheel radius (m)
+    wheel_width: 0.1      # wheel contact patch width (m)
+    wheel_lug_height: 0.01  # grouser height protruding from wheel surface (m)
+    wheel_lug_count: 16     # number of grousers around wheel circumference
+  soil:
+    # Extremely loose regolith — deep sinkage and massive rolling resistance
+    # create a dramatic difference vs PhysX rigid-body friction.
+    k_c: 400.0            # very weak cohesive structure
+    k_phi: 100000.0       # very soft soil — wheels sink deeply
+    n: 0.6                # sinkage grows rapidly with any load
+    # Mohr-Coulomb shear strength
+    c: 20.0               # near-zero cohesion — dry powder
+    phi_deg: 18.0         # very low friction angle — soil shears easily
+    K: 0.04               # traction mobilizes very slowly — lots of slip first
+    # Other
+    rho: 1300.0           # loosely packed density
+    gravity: 1.625        # surface gravity (m/s^2)
+    slip_sinkage_coeff: 2.0  # extreme slip-sinkage — wheels dig in fast
+    # Soil heterogeneity (non-uniform terrain)
+    heterogeneity: 0.9    # strong variation — dramatic patchy behavior
+    heterogeneity_scale: 1.0  # small patches — frequent traction changes
+    heterogeneity_seed: 42
+
+starfield_settings:
+  enable: false
+
+stellar_engine_settings:
+  enable: false
+  start_date:
+    year: 2024 
+    month: 5
+    day: 1
+    hour: 12
+    minute: 50
+  time_scale: 1
+  update_interval: 600
+  ephemeris_path: assets/Ephemeris
+
+sun_settings:
+  intensity: 2500.0
+  angle: 0.53
+  color: [1.0, 1.0, 1.0]
+  temperature: 6500.0
+  azimuth: 180.0
+  elevation: 90.0
+
+earth_settings:
+  texture_path: assets/Textures/Earth/earth_color_with_clouds.tif
+  scale: 50.0
+  enable: true
+
+rocks_settings:
+  enable: false
+  instancers_path: /LunarYard/Rocks
+  assets_root: assets/USD_Assets/rocks
+  rocks_settings:
+    large_rocks:
+      seed: 42
+      collections: ["lunar_rocks/rocks_s2_r256"]
+      realistic_distribution:
+        method: background_scatter
+        d_min: 0.5
+        d_max: 2.0
+        alpha: 2.2
+        density: 0.3
+    small_rocks:
+      seed: 42
+      collections: ["lunar_rocks/rocks_s2_r128"]
+      realistic_distribution:
+        method: background_scatter
+        d_min: 0.1
+        d_max: 0.5
+        alpha: 2.5
+        density: 1.0
+
+robots_settings:
+  uses_nucleus: false
+  is_ROS2: true
+  max_robots: 5
+  robots_root: "/Robots"
+  parameters:
+    # Terramechanics rover (Bekker-Janosi forces applied)
+    - robot_name: husky
+      usd_path: assets/USD_Assets/robots/ros2_husky_PhysX_vlp16.usd
+      pose:
+        position: [8.0, 10.0, 0.5]
+        orientation: [1, 0, 0, 0]
+      domain_id: 0
+      target_links: ["front_left_wheel_link", "front_right_wheel_link", "rear_left_wheel_link", "rear_right_wheel_link"]
+      base_link: "base_link"
+    # PhysX-only rover (baseline comparison — listed in skip_robots)
+    - robot_name: husky_physx
+      usd_path: assets/USD_Assets/robots/ros2_husky_PhysX_vlp16.usd
+      pose:
+        position: [12.0, 10.0, 0.5]
+        orientation: [1, 0, 0, 0]
+      domain_id: 0
+      target_links: ["front_left_wheel_link", "front_right_wheel_link", "rear_left_wheel_link", "rear_right_wheel_link"]
+      base_link: "base_link"
+    # - robot_name: pragyaan
+    #   usd_path: assets/USD_Assets/robots/pragyaan/pragyaan.usd
+    #   pose:
+    #     position: [10.0, 10.0, 0.5]
+    #     orientation: [0.0, 0.0, 0.70711, 0.70711]
+    #   domain_id: 0
+    #   target_links:
+    #     - "Mobility/Wheel_front_left"
+    #     - "Mobility/Wheel_front_right"
+    #     - "Mobility/Wheel_middle_left"
+    #     - "Mobility/Wheel_middle_right"
+    #     - "Mobility/Wheel_back_left"
+    #     - "Mobility/Wheel_back_right"
+    #   base_link: "base_link"
+    #   dimensions:
+    #     width: 1.6
+    #     length: 1.5
+    #   wheel_joints:
+    #     left: ["wheel_fl", "wheel_ml", "wheel_bl"]
+    #     right: ["wheel_fr", "wheel_mr", "wheel_br"]
+    #   camera:
+    #     prim_path: "/Robots/pragyaan/Body/body_main/depth_cam"
+    #     resolutions:
+    #       low: [320, 240]
+    #       high: [1440, 1080]
+    #   imu_sensor_path: "/Robots/pragyaan/base_link/Imu_Sensor"
+    #   turn_speed_coef: 19
+    #   solar_panel_joint: "solarJoint"
+  

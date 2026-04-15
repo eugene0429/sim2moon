@@ -231,6 +231,8 @@ class CraterGenerator:
         if craters_data is None:
             craters_data = []
 
+        ph, pw = dem_padded.shape
+
         if len(craters_data) == 0:
             # Generate new craters from coords/radii
             for coord, rad in zip(coords, radii):
@@ -242,10 +244,18 @@ class CraterGenerator:
                 center_px = (coord_px + pad).astype(np.int64)
                 origin_px = (coord_px - cd.size / 2 + pad).astype(np.int64)
 
-                dem_padded[
-                    origin_px[0]: origin_px[0] + cd.size,
-                    origin_px[1]: origin_px[1] + cd.size,
-                ] += crater_patch
+                # Clip to padded DEM bounds
+                r0 = max(origin_px[0], 0)
+                c0 = max(origin_px[1], 0)
+                r1 = min(origin_px[0] + cd.size, ph)
+                c1 = min(origin_px[1] + cd.size, pw)
+                pr0 = r0 - origin_px[0]
+                pc0 = c0 - origin_px[1]
+                pr1 = pr0 + (r1 - r0)
+                pc1 = pc0 + (c1 - c0)
+
+                if r1 > r0 and c1 > c0:
+                    dem_padded[r0:r1, c0:c1] += crater_patch[pr0:pr1, pc0:pc1]
 
                 mask_padded = cv2.circle(
                     mask_padded,
@@ -264,10 +274,17 @@ class CraterGenerator:
                 center_px = (coord_px + pad).astype(np.int64)
                 origin_px = (coord_px - cd.size / 2 + pad).astype(np.int64)
 
-                dem_padded[
-                    origin_px[0]: origin_px[0] + cd.size,
-                    origin_px[1]: origin_px[1] + cd.size,
-                ] += crater_patch
+                r0 = max(origin_px[0], 0)
+                c0 = max(origin_px[1], 0)
+                r1 = min(origin_px[0] + cd.size, ph)
+                c1 = min(origin_px[1] + cd.size, pw)
+                pr0 = r0 - origin_px[0]
+                pc0 = c0 - origin_px[1]
+                pr1 = pr0 + (r1 - r0)
+                pc1 = pc0 + (c1 - c0)
+
+                if r1 > r0 and c1 > c0:
+                    dem_padded[r0:r1, c0:c1] += crater_patch[pr0:pr1, pc0:pc1]
 
                 mask_padded = cv2.circle(
                     mask_padded,
